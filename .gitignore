@@ -116,8 +116,11 @@ dist
 # DynamoDB Local files
 .dynamodb/
 
-# Firebase cache directory
+# Firebase cache directory and config files 
 .firebase/
+firebaseConfig.json
+firebase_config_encoded.txt
+firebase_config_decoded.json
 
 # TernJS port file
 .tern-port

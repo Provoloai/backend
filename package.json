@@ -1,0 +1,46 @@
+{
+  "name": "provolo-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "nodemon ts-node ./src/server.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "encode-firebase-config": "ts-node ./src/scripts/encodeFirebaseConfig.ts",
+    "decode-firebase-config": "ts-node ./src/scripts/decodeFirebaseConfig.ts",
+    "seed-tiers": "ts-node ./src/cli/seed-tiers.ts",
+    "migrate-prompt-quota": "ts-node ./src/cli/migrate-prompt-quota.ts",
+    "migrate-users-tier": "ts-node ./src/cli/migrate-users-tier.ts",
+    "seed-user-polar-ids": "ts-node ./src/cli/seed-user-polar-ids.ts",
+    "polar:list-customers": "ts-node ./src/cli/polar-list-customers.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.20.0",
+    "@polar-sh/express": "^0.3.7",
+    "@polar-sh/sdk": "^0.35.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.5.0",
+    "morgan": "^1.10.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^24.5.2",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
