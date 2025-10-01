@@ -10,14 +10,21 @@ export function resetIfNewInterval(feature: QuotaFeature, now: Date): number {
   let last: Date;
   if (feature.lastUsed instanceof Date) {
     last = feature.lastUsed;
-  } else if (typeof feature.lastUsed === "object" && typeof (feature.lastUsed as any).toDate === "function") {
+  } else if (
+    typeof feature.lastUsed === "object" &&
+    typeof (feature.lastUsed as any).toDate === "function"
+  ) {
     last = (feature.lastUsed as any).toDate();
   } else {
     last = new Date(feature.lastUsed);
   }
   switch (feature.recurringInterval) {
     case "daily":
-      if (last.getUTCFullYear() !== now.getUTCFullYear() || last.getUTCMonth() !== now.getUTCMonth() || last.getUTCDate() !== now.getUTCDate()) {
+      if (
+        last.getUTCFullYear() !== now.getUTCFullYear() ||
+        last.getUTCMonth() !== now.getUTCMonth() ||
+        last.getUTCDate() !== now.getUTCDate()
+      ) {
         return 0;
       }
       break;
@@ -35,7 +42,10 @@ export function resetIfNewInterval(feature: QuotaFeature, now: Date): number {
       break;
     }
     case "monthly":
-      if (last.getUTCFullYear() !== now.getUTCFullYear() || last.getUTCMonth() !== now.getUTCMonth()) {
+      if (
+        last.getUTCFullYear() !== now.getUTCFullYear() ||
+        last.getUTCMonth() !== now.getUTCMonth()
+      ) {
         return 0;
       }
       break;
@@ -81,7 +91,11 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
 }
 
 // Seed quota history for a user from their tier
-export async function createQuotaHistoryFromTier(userId: string, slug: FeatureSlug, closeApp: boolean = true) {
+export async function createQuotaHistoryFromTier(
+  userId: string,
+  slug: FeatureSlug,
+  closeApp: boolean = true
+) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
