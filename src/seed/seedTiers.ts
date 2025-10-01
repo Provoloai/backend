@@ -54,15 +54,15 @@ const tiers: Tier[] = [
         slug: "upwork_profile_optimizer",
         limited: false,
         recurringInterval: "",
-        maxQuota: 0,
+        maxQuota: -1,
       },
       {
         name: "LinkedIn Profile Optimizer",
-        description: "Access to the upcoming LinkedIn Profile Optimizer feature.",
+        description: "Access to the LinkedIn Profile Optimizer feature.",
         slug: "linkedin_profile_optimizer",
         limited: false,
         recurringInterval: "",
-        maxQuota: 0,
+        maxQuota: -1,
       },
       {
         name: "AI Proposals",
@@ -70,7 +70,7 @@ const tiers: Tier[] = [
         slug: "ai_proposals",
         limited: false,
         recurringInterval: "",
-        maxQuota: 0,
+        maxQuota: -1,
       },
       {
         name: "Comunity Access",
@@ -78,7 +78,7 @@ const tiers: Tier[] = [
         slug: "comunity_access",
         limited: false,
         recurringInterval: "",
-        maxQuota: 0,
+        maxQuota: -1,
       },
       {
         name: "Newsletters",
@@ -86,7 +86,7 @@ const tiers: Tier[] = [
         slug: "newsletters",
         limited: false,
         recurringInterval: "",
-        maxQuota: 0,
+        maxQuota: -1,
       },
     ],
     createdAt: new Date(),
@@ -98,11 +98,13 @@ function validateFeatures(features: Feature[]): string | null {
   for (const f of features) {
     if (f.limited) {
       if (f.maxQuota <= 0) return `feature ${f.slug} is limited but maxQuota is not set`;
-      if (!f.recurringInterval)
-        return `feature ${f.slug} is limited but recurringInterval is not set`;
+      if (!f.recurringInterval) return `feature ${f.slug} is limited but recurringInterval is not set`;
     } else {
-      if (f.maxQuota !== 0 || f.recurringInterval !== "") {
-        return `feature ${f.slug} is not limited but maxQuota/recurringInterval set`;
+      if (f.maxQuota !== 0 && f.maxQuota !== -1) {
+        return `feature ${f.slug} is not limited but maxQuota is not 0 or -1`;
+      }
+      if (f.recurringInterval !== "") {
+        return `feature ${f.slug} is not limited but recurringInterval is set`;
       }
     }
   }

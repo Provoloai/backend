@@ -10,21 +10,14 @@ export function resetIfNewInterval(feature: QuotaFeature, now: Date): number {
   let last: Date;
   if (feature.lastUsed instanceof Date) {
     last = feature.lastUsed;
-  } else if (
-    typeof feature.lastUsed === "object" &&
-    typeof (feature.lastUsed as any).toDate === "function"
-  ) {
+  } else if (typeof feature.lastUsed === "object" && typeof (feature.lastUsed as any).toDate === "function") {
     last = (feature.lastUsed as any).toDate();
   } else {
     last = new Date(feature.lastUsed);
   }
   switch (feature.recurringInterval) {
     case "daily":
-      if (
-        last.getUTCFullYear() !== now.getUTCFullYear() ||
-        last.getUTCMonth() !== now.getUTCMonth() ||
-        last.getUTCDate() !== now.getUTCDate()
-      ) {
+      if (last.getUTCFullYear() !== now.getUTCFullYear() || last.getUTCMonth() !== now.getUTCMonth() || last.getUTCDate() !== now.getUTCDate()) {
         return 0;
       }
       break;
@@ -42,10 +35,7 @@ export function resetIfNewInterval(feature: QuotaFeature, now: Date): number {
       break;
     }
     case "monthly":
-      if (
-        last.getUTCFullYear() !== now.getUTCFullYear() ||
-        last.getUTCMonth() !== now.getUTCMonth()
-      ) {
+      if (last.getUTCFullYear() !== now.getUTCFullYear() || last.getUTCMonth() !== now.getUTCMonth()) {
         return 0;
       }
       break;
@@ -70,6 +60,16 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
     }
     const now = new Date();
     const currentCount = resetIfNewInterval(feature, now);
+
+    // If unlimited (maxQuota is -1), always allow
+    if (feature.maxQuota === -1) {
+      return {
+        allowed: true,
+        count: currentCount,
+        limit: -1,
+      };
+    }
+
     return {
       allowed: currentCount < feature.maxQuota,
       count: currentCount,
@@ -81,11 +81,7 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
 }
 
 // Seed quota history for a user from their tier
-export async function createQuotaHistoryFromTier(
-  userId: string,
-  slug: FeatureSlug,
-  closeApp: boolean = true
-) {
+export async function createQuotaHistoryFromTier(userId: string, slug: FeatureSlug, closeApp: boolean = true) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
@@ -121,10 +117,12 @@ export async function createQuotaHistoryFromTier(
     };
     await db.collection("quota_history").doc(userId).set(quotaHistory);
     const target = features.find((f: QuotaFeature) => f.slug === slug);
+    const targetLimit = target?.maxQuota ?? 0;
+
     return {
-      allowed: true,
+      allowed: targetLimit === -1 || 0 < targetLimit, // Always allow if unlimited (-1) or if there's quota
       count: 0,
-      limit: target?.maxQuota ?? 0,
+      limit: targetLimit,
     };
   } finally {
     if (closeApp) {
