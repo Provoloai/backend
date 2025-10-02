@@ -133,12 +133,17 @@ export async function paymentWebhook(req: Request, res: Response) {
       }
       events[eventType] = data;
 
+      // Ensure updated_at is always set (never undefined)
+      let safeUpdatedAt = updatedAt;
+      if (safeUpdatedAt === undefined) {
+        safeUpdatedAt = new Date().toISOString();
+      }
       await docRef.set(
         {
           checkout_id: checkoutID,
           current_status: status,
           created_at: createdAt,
-          updated_at: updatedAt,
+          updated_at: safeUpdatedAt,
           events: events,
         },
         { merge: true }

@@ -10,7 +10,7 @@ const tiers: Tier[] = [
     description: "Perfect for new freelancers and those exploring the platform.",
     recurringInterval: "monthly",
     price: 0,
-    polarRefId: "d1173db4-8051-47a6-a3de-ba6296b2fb17",
+    polarRefId: "c9587a7b-54f7-454e-bb3b-d8f789510475",
     features: [
       {
         name: "Upwork Profile Optimizer",
@@ -46,7 +46,7 @@ const tiers: Tier[] = [
     description: "For freelancers actively applying for jobs and serious about getting clients.",
     recurringInterval: "monthly",
     price: 399,
-    polarRefId: "503fe6a4-b148-41bb-b779-60334594794e",
+    polarRefId: "a51fa43c-5ff6-420b-b719-066dff411484",
     features: [
       {
         name: "Upwork Profile Optimizer",
@@ -98,7 +98,8 @@ function validateFeatures(features: Feature[]): string | null {
   for (const f of features) {
     if (f.limited) {
       if (f.maxQuota <= 0) return `feature ${f.slug} is limited but maxQuota is not set`;
-      if (!f.recurringInterval) return `feature ${f.slug} is limited but recurringInterval is not set`;
+      if (!f.recurringInterval)
+        return `feature ${f.slug} is limited but recurringInterval is not set`;
     } else {
       if (f.maxQuota !== 0 && f.maxQuota !== -1) {
         return `feature ${f.slug} is not limited but maxQuota is not 0 or -1`;

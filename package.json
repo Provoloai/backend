@@ -13,8 +13,7 @@
     "seed-tiers": "ts-node ./src/cli/seed-tiers.ts",
     "migrate-prompt-quota": "ts-node ./src/cli/migrate-prompt-quota.ts",
     "migrate-users-tier": "ts-node ./src/cli/migrate-users-tier.ts",
-    "seed-user-polar-ids": "ts-node ./src/cli/seed-user-polar-ids.ts",
-    "polar:list-customers": "ts-node ./src/cli/polar-list-customers.ts"
+    "seed-user-polar-ids": "ts-node ./src/cli/seed-user-polar-ids.ts"
   },
   "keywords": [],
   "author": "",
