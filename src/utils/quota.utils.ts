@@ -94,7 +94,8 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
 export async function createQuotaHistoryFromTier(
   userId: string,
   slug: FeatureSlug,
-  closeApp: boolean = true
+  closeApp: boolean = true,
+  overrideTierId?: string
 ) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -109,7 +110,7 @@ export async function createQuotaHistoryFromTier(
     if (!userDoc) throw new Error(`User document not found: ${userId}`);
 
     const user = userDoc.data();
-    const tierId = user.tierId || process.env.DEFAULT_TIER_ID || "starter";
+    const tierId = overrideTierId || user.tierId || process.env.DEFAULT_TIER_ID || "starter";
     // Get tier doc
     const tierSnap = await db.collection("tiers").doc(tierId).get();
     if (!tierSnap.exists) throw new Error(`Tier not found: ${tierId}`);

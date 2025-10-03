@@ -228,8 +228,8 @@ export async function archiveExpiredSubscriptions(req: Request, res: Response) {
       { merge: true }
     );
 
-    // Create new quota history for starter tier
-    await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID as any);
+    // Create new quota history for starter tier (pass overrideTierId to ensure correct tier)
+    await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID as any, true, DEFAULT_TIER_ID);
 
     archivedCount++;
     console.log(`Archived quota for user ${userId}`);
