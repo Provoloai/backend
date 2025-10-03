@@ -190,8 +190,28 @@ export async function checkAndUpdateQuota(userId: string, slug: FeatureSlug) {
 export async function updateQuotaHistoryForCanceledSubscription(data: Record<string, any>) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
-  const userId = data.external_id;
+  let userId = data.external_id;
   const now = new Date();
+
+  // Fallback: if no external_id, search for customer_id in users table (polarId)
+  if (!userId && data.customer_id) {
+    const userQuery = db.collection("users").where("polarId", "==", data.customer_id).limit(1);
+    const userSnap = await userQuery.get();
+    if (!userSnap.empty && userSnap.docs[0]) {
+      const userDoc = userSnap.docs[0];
+      const userData = userDoc.data();
+      if (userData && userData.userId) {
+        userId = userData.userId;
+      }
+    }
+  }
+
+  if (!userId) {
+    console.log(
+      "No userId found for canceled subscription (missing external_id and polarId match)"
+    );
+    return;
+  }
 
   // Update quota_history for the user to reflect cancellation
   const quotaDocRef = db.collection("quota_history").doc(userId);
