@@ -4,15 +4,14 @@ import {
   getPaymentTiers,
   getPaymentTierBySlug,
   paymentWebhook,
-  archiveExpiredSubscriptions
+  archiveExpiredSubscriptions,
 } from "../controllers/payment.controller.ts";
-
 
 const paymentRouter: ExpressRouter = Router();
 
 /**
  * @swagger
- * /payment/cron/archive-expired:
+ * /api/v1/payment/cron/archive-expired:
  *   get:
  *     summary: Archive expired/canceled subscriptions and quota histories
  *     description: Archives quota histories for users whose subscriptions are canceled and expired, downgrades them to the starter tier, and creates new quota histories.
@@ -37,7 +36,7 @@ paymentRouter.get("/cron/archive-expired", archiveExpiredSubscriptions);
 
 /**
  * @swagger
- * /payment/tiers:
+ * /api/v1/payment/tiers:
  *   get:
  *     summary: Get all payment tiers
  *     description: Retrieves all available payment tiers sorted by price in ascending order
@@ -73,7 +72,7 @@ paymentRouter.get("/tiers", getPaymentTiers);
 
 /**
  * @swagger
- * /payment/tiers/{slug}:
+ * /api/v1/payment/tiers/{slug}:
  *   get:
  *     summary: Get payment tier by slug
  *     description: Retrieves a specific payment tier by its slug identifier
@@ -125,7 +124,7 @@ paymentRouter.get("/tiers/:slug", getPaymentTierBySlug);
 
 /**
  * @swagger
- * /payment/webhook:
+ * /api/v1/payment/webhook:
  *   post:
  *     summary: Payment webhook handler
  *     description: Handles webhook events from the payment provider (Polar.sh) for subscription and order updates
