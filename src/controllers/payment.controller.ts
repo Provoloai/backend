@@ -220,13 +220,16 @@ export async function archiveExpiredSubscriptions(req: Request, res: Response) {
     await db.collection("quota_history").doc(userId).delete();
 
     // Downgrade user to starter tier and clear pending_archive
-    await db.collection("users").doc(userId).set(
-      {
+    const userQuerySnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+    if (!userQuerySnap.empty && userQuerySnap.docs[0]) {
+      const userDocRef = userQuerySnap.docs[0].ref;
+      await userDocRef.update({
         tierId: DEFAULT_TIER_ID,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+        updatedAt: new Date(),
+      });
+    } else {
+      console.warn(`User with userId ${userId} not found for tier downgrade.`);
+    }
 
     // Create new quota history for starter tier (pass overrideTierId to ensure correct tier)
     await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID as any, true, DEFAULT_TIER_ID);
