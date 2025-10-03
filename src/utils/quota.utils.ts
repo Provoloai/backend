@@ -274,3 +274,88 @@ export async function updateQuotaHistoryForUncanceledSubscription(data: Record<s
   );
   console.log(`Uncanceled quota_history for user ${userId}`);
 }
+
+// Archive quota and downgrade user for revoked subscription
+export async function updateQuotaHistoryForRevokedSubscription(
+  data: Record<string, any>,
+  DEFAULT_TIER_ID: string
+) {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  let userId = data.external_id;
+  // Fallback: if no external_id, search for customer_id in users table (polarId)
+  if (!userId && data.customer_id) {
+    const userQuery = db.collection("users").where("polarId", "==", data.customer_id).limit(1);
+    const userSnap = await userQuery.get();
+    if (!userSnap.empty && userSnap.docs[0]) {
+      const userDoc = userSnap.docs[0];
+      const userData = userDoc.data();
+      if (userData && userData.userId) {
+        userId = userData.userId;
+      }
+    }
+  }
+  if (!userId) {
+    console.log("No userId found for revoked subscription (missing external_id and polarId match)");
+    return;
+  }
+  // Archive current quota history
+  const quotaDoc = await db.collection("quota_history").doc(userId).get();
+  if (quotaDoc.exists) {
+    // Archive quota
+    const currentQuota = quotaDoc.data();
+    const archiveDocRef = db.collection("quota_archive").doc(userId);
+    const archiveDoc = await archiveDocRef.get();
+    let archiveData;
+    const now = new Date().toISOString();
+    if (!archiveDoc.exists) {
+      archiveData = {
+        userId,
+        prev_quotas: [
+          {
+            archived_at: now,
+            ...currentQuota,
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      };
+    } else {
+      const existingArchive = archiveDoc.data();
+      if (existingArchive) {
+        archiveData = existingArchive;
+        const prevQuotas = archiveData.prev_quotas || [];
+        prevQuotas.push({ archived_at: now, ...currentQuota });
+        archiveData.prev_quotas = prevQuotas;
+        archiveData.updatedAt = now;
+      } else {
+        // If somehow archiveDoc.data() is undefined, create new archiveData
+        archiveData = {
+          userId,
+          prev_quotas: [
+            {
+              archived_at: now,
+              ...currentQuota,
+            },
+          ],
+          createdAt: now,
+          updatedAt: now,
+        };
+      }
+    }
+    await archiveDocRef.set(archiveData);
+    await db.collection("quota_history").doc(userId).delete();
+    console.log(`Archived quota for user ${userId}`);
+  }
+  // Downgrade user to starter tier
+  await db.collection("users").doc(userId).set(
+    {
+      tierId: DEFAULT_TIER_ID,
+      updatedAt: new Date(),
+    },
+    { merge: true }
+  );
+  // Create new quota history for starter tier
+  await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID as any);
+  console.log(`User ${userId} downgraded and quota archived due to subscription.revoked`);
+}

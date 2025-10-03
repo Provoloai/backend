@@ -4,9 +4,36 @@ import {
   getPaymentTiers,
   getPaymentTierBySlug,
   paymentWebhook,
+  archiveExpiredSubscriptions
 } from "../controllers/payment.controller.ts";
 
+
 const paymentRouter: ExpressRouter = Router();
+
+/**
+ * @swagger
+ * /payment/cron/archive-expired:
+ *   get:
+ *     summary: Archive expired/canceled subscriptions and quota histories
+ *     description: Archives quota histories for users whose subscriptions are canceled and expired, downgrades them to the starter tier, and creates new quota histories.
+ *     tags: [Payment]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Expired/canceled subscriptions archived successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 archivedCount:
+ *                   type: integer
+ *                   description: Number of archived quota histories
+ *             example:
+ *               archivedCount: 5
+ */
+paymentRouter.get("/cron/archive-expired", archiveExpiredSubscriptions);
 
 /**
  * @swagger

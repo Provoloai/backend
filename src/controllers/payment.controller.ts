@@ -6,6 +6,7 @@ import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
 import {
   createQuotaHistoryFromTier,
   updateQuotaHistoryForCanceledSubscription,
+  updateQuotaHistoryForRevokedSubscription,
   updateQuotaHistoryForUncanceledSubscription,
 } from "../utils/quota.utils.ts";
 import type { Tier } from "../types/tiers.ts";
@@ -123,6 +124,7 @@ export async function paymentWebhook(req: Request, res: Response) {
         "order.updated",
         "subscription.canceled",
         "subscription.uncanceled",
+        "subscription.revoked",
       ].includes(eventType)
     ) {
       const app = getFirebaseApp();
@@ -169,6 +171,8 @@ export async function paymentWebhook(req: Request, res: Response) {
         await updateQuotaHistoryForCanceledSubscription(data);
       } else if (eventType === "subscription.uncanceled") {
         await updateQuotaHistoryForUncanceledSubscription(data);
+      } else if (eventType === "subscription.revoked") {
+        await updateQuotaHistoryForRevokedSubscription(data, DEFAULT_TIER_ID);
       } else {
         // Log all other events but do not persist
         console.log(`Webhook event ${eventType} received and logged only.`);
