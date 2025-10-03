@@ -190,7 +190,7 @@ export async function checkAndUpdateQuota(userId: string, slug: FeatureSlug) {
 export async function updateQuotaHistoryForCanceledSubscription(data: Record<string, any>) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
-  const userId = data.customer_id;
+  const userId = data.external_id;
   const now = new Date();
 
   // Update quota_history for the user to reflect cancellation
