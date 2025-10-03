@@ -3,7 +3,10 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import type { DocumentSnapshot, DocumentReference } from "firebase-admin/firestore";
 import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
-import { createQuotaHistoryFromTier } from "../utils/quota.utils.ts";
+import {
+  createQuotaHistoryFromTier,
+  updateQuotaHistoryForCanceledSubscription,
+} from "../utils/quota.utils.ts";
 import type { Tier } from "../types/tiers.ts";
 import type { QuotaHistory } from "../types/quotas.ts";
 
@@ -110,11 +113,15 @@ export async function paymentWebhook(req: Request, res: Response) {
     let createdAt = data.created_at as string;
     let updatedAt = (data.modified_at as string) || (data.updated_at as string);
 
-    // Only persist subscription.created, subscription.updated, order.created, and order.updated
+    // Only persist subscription.created, subscription.updated, order.created, order.updated, and handle subscription.canceled
     if (
-      ["subscription.created", "subscription.updated", "order.created", "order.updated"].includes(
-        eventType
-      )
+      [
+        "subscription.created",
+        "subscription.updated",
+        "order.created",
+        "order.updated",
+        "subscription.canceled",
+      ].includes(eventType)
     ) {
       const app = getFirebaseApp();
       const db = getFirestore(app);
@@ -156,19 +163,21 @@ export async function paymentWebhook(req: Request, res: Response) {
         } catch (err) {
           console.error("Failed to process order.updated event:", err);
         }
+      } else if (eventType === "subscription.canceled") {
+        await updateQuotaHistoryForCanceledSubscription(data);
+      } else {
+        // Log all other events but do not persist
+        console.log(`Webhook event ${eventType} received and logged only.`);
       }
-    } else {
-      // Log all other events but do not persist
-      console.log(`Webhook event ${eventType} received and logged only.`);
-    }
 
-    // Return success using the standard APIResponse pattern
-    const resp = newSuccessResponse(
-      "Payment Webhook",
-      "Webhook received and processed successfully - any data structure accepted",
-      webhookData
-    );
-    res.status(200).json(resp);
+      // Return success using the standard APIResponse pattern
+      const resp = newSuccessResponse(
+        "Payment Webhook",
+        "Webhook received and processed successfully - any data structure accepted",
+        webhookData
+      );
+      res.status(200).json(resp);
+    }
   } catch (err: any) {
     console.error("[paymentWebhook] Invalid JSON payload received:", err);
     const errorResponse = newErrorResponse(
@@ -177,6 +186,48 @@ export async function paymentWebhook(req: Request, res: Response) {
     );
     res.status(400).json(errorResponse);
   }
+}
+
+// Endpoint for cron job to archive expired subscriptions and quota histories
+export async function archiveExpiredSubscriptions(req: Request, res: Response) {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  const now = new Date();
+
+  // Find quota histories pending archive and expired
+  const expiredQuotas = await db
+    .collection("quota_history")
+    .where("canceled", "==", true)
+    .where("subscription_period_end", "<", now.toISOString())
+    .get();
+
+  let archivedCount = 0;
+
+  for (const doc of expiredQuotas.docs) {
+    const quota = doc.data();
+    const userId = quota.userId;
+
+    // Archive quota history
+    await db.collection("quota_archive").doc(userId).set(quota);
+    await db.collection("quota_history").doc(userId).delete();
+
+    // Downgrade user to starter tier and clear pending_archive
+    await db.collection("users").doc(userId).set(
+      {
+        tierId: DEFAULT_TIER_ID,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    // Create new quota history for starter tier
+    await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID as any);
+
+    archivedCount++;
+    console.log(`Archived quota for user ${userId}`);
+  }
+
+  res.status(200).json({ archivedCount });
 }
 
 // Helper function to handle order.updated events
@@ -362,6 +413,7 @@ async function archiveQuotaHistory(userID: string) {
 
   let archiveData: Record<string, any>;
   const now = FieldValue.serverTimestamp();
+  const archivedAt = new Date().toISOString();
 
   if (!archiveDoc.exists) {
     // Create new archive document
@@ -369,7 +421,7 @@ async function archiveQuotaHistory(userID: string) {
       userId: userID,
       prev_quotas: [
         {
-          archived_at: now,
+          archived_at: archivedAt,
           tier_id: currentQuota.tierId,
           last_subscription_date: currentQuota.lastSubscriptionDate,
           features: currentQuota.features,
@@ -387,7 +439,7 @@ async function archiveQuotaHistory(userID: string) {
     // Append new quota history to prev_quotas array
     const prevQuotas = archiveData.prev_quotas || [];
     const newQuotaEntry = {
-      archived_at: now,
+      archived_at: archivedAt,
       tier_id: currentQuota.tierId,
       last_subscription_date: currentQuota.lastSubscriptionDate,
       features: currentQuota.features,

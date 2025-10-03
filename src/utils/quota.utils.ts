@@ -185,3 +185,30 @@ export async function checkAndUpdateQuota(userId: string, slug: FeatureSlug) {
   await updateUserQuota(userId, slug);
   return { ...result, count: result.count + 1 };
 }
+
+// Update quota history for canceled subscription
+export async function updateQuotaHistoryForCanceledSubscription(data: Record<string, any>) {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  const userId = data.customer_id;
+  const now = new Date();
+
+  // Update quota_history for the user to reflect cancellation
+  const quotaDocRef = db.collection("quota_history").doc(userId);
+  const quotaDoc = await quotaDocRef.get();
+  if (!quotaDoc.exists) {
+    console.log(`No quota history found for canceled subscription user ${userId}`);
+    return;
+  }
+  // Mark quota as canceled and set end date
+  await quotaDocRef.set(
+    {
+      canceled: true,
+      canceled_at: data.canceled_at || now.toISOString(),
+      subscription_period_end: data.current_period_end,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+  console.log(`Updated quota_history for canceled subscription user ${userId}`);
+}
