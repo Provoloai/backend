@@ -232,3 +232,45 @@ export async function updateQuotaHistoryForCanceledSubscription(data: Record<str
   );
   console.log(`Updated quota_history for canceled subscription user ${userId}`);
 }
+
+// Undo quota cancellation for uncanceled subscription
+export async function updateQuotaHistoryForUncanceledSubscription(data: Record<string, any>) {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  let userId = data.external_id;
+  // Fallback: if no external_id, search for customer_id in users table (polarId)
+  if (!userId && data.customer_id) {
+    const userQuery = db.collection("users").where("polarId", "==", data.customer_id).limit(1);
+    const userSnap = await userQuery.get();
+    if (!userSnap.empty && userSnap.docs[0]) {
+      const userDoc = userSnap.docs[0];
+      const userData = userDoc.data();
+      if (userData && userData.userId) {
+        userId = userData.userId;
+      }
+    }
+  }
+  if (!userId) {
+    console.log(
+      "No userId found for uncanceled subscription (missing external_id and polarId match)"
+    );
+    return;
+  }
+  // Update quota_history for the user to undo cancellation
+  const quotaDocRef = db.collection("quota_history").doc(userId);
+  const quotaDoc = await quotaDocRef.get();
+  if (!quotaDoc.exists) {
+    console.log(`No quota history found to uncancel for user ${userId}`);
+    return;
+  }
+  await quotaDocRef.set(
+    {
+      canceled: false,
+      canceled_at: null,
+      subscription_period_end: null,
+      updatedAt: new Date(),
+    },
+    { merge: true }
+  );
+  console.log(`Uncanceled quota_history for user ${userId}`);
+}

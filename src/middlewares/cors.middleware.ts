@@ -8,6 +8,7 @@ export const prodOrigins = [
   "https://www.provolo.org",
   "http://localhost:5173",
   "https://provolo-backend.fly.dev",
+  "https://frontend-gray-omega-5m2sf8zfln.vercel.app",
 ];
 
 export function devCors(): CorsOptions {
