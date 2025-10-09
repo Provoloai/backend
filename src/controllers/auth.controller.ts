@@ -7,6 +7,9 @@ import { getCookie } from "../utils/getCookie.ts";
 import { createQuotaHistoryFromTier } from "../utils/quota.utils.ts";
 import { createPolarCustomer } from "../utils/polarClient.ts";
 
+// @ts-expect-error: No type definitions for mailerlite.config.js
+import { subscribeUser } from "../config/mailerlite.config.js";
+
 export async function login(req: Request, res: Response) {
   try {
     const { idToken } = req.body;
@@ -14,7 +17,10 @@ export async function login(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse("Invalid Request", "Please check your request format and try again.")
+          newErrorResponse(
+            "Invalid Request",
+            "Please check your request format and try again."
+          )
         );
     }
 
@@ -40,7 +46,9 @@ export async function login(req: Request, res: Response) {
     // Create session cookie (expires in 5 days)
     let cookie;
     try {
-      cookie = await auth.createSessionCookie(idToken, { expiresIn: 5 * 24 * 60 * 60 * 1000 });
+      cookie = await auth.createSessionCookie(idToken, {
+        expiresIn: 5 * 24 * 60 * 60 * 1000,
+      });
     } catch (err) {
       return res
         .status(500)
@@ -109,13 +117,23 @@ export async function login(req: Request, res: Response) {
       displayName: userRecord.displayName,
       tierId: data.tierId,
       subscribed: data.subscribed ?? true,
-      createdAt: data.createdAt ? new Date(data.createdAt.seconds * 1000) : undefined,
-      updatedAt: data.updatedAt ? new Date(data.updatedAt.seconds * 1000) : undefined,
+      createdAt: data.createdAt
+        ? new Date(data.createdAt.seconds * 1000)
+        : undefined,
+      updatedAt: data.updatedAt
+        ? new Date(data.updatedAt.seconds * 1000)
+        : undefined,
     };
 
     return res
       .status(200)
-      .json(newSuccessResponse("Login Successful", "User authenticated successfully", user));
+      .json(
+        newSuccessResponse(
+          "Login Successful",
+          "User authenticated successfully",
+          user
+        )
+      );
   } catch (err) {
     return res
       .status(500)
@@ -137,7 +155,10 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse("Invalid Request", "Please check your request format and try again.")
+          newErrorResponse(
+            "Invalid Request",
+            "Please check your request format and try again."
+          )
         );
 
     const app = getFirebaseApp();
@@ -196,8 +217,12 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           email: userRecord.email,
           tierId: data.tierId || starterTierId,
           subscribed: data.subscribed ?? true,
-          createdAt: data.createdAt ? new Date(data.createdAt.seconds * 1000) : now,
-          updatedAt: data.updatedAt ? new Date(data.updatedAt.seconds * 1000) : now,
+          createdAt: data.createdAt
+            ? new Date(data.createdAt.seconds * 1000)
+            : now,
+          updatedAt: data.updatedAt
+            ? new Date(data.updatedAt.seconds * 1000)
+            : now,
         };
 
         // Only add displayName if it exists
@@ -247,12 +272,15 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         (userData as any).polarId = polarCustomerResult.id;
 
         console.log(
-          `Created Polar customer for new user ${userID}: ${polarCustomerResult.id} (${
-            polarCustomerResult.created ? "new" : "existing"
-          })`
+          `Created Polar customer for new user ${userID}: ${
+            polarCustomerResult.id
+          } (${polarCustomerResult.created ? "new" : "existing"})`
         );
       } catch (error) {
-        console.error(`Failed to create Polar customer for new user ${userID}:`, error);
+        console.error(
+          `Failed to create Polar customer for new user ${userID}:`,
+          error
+        );
       }
 
       // Create quota history for new users
@@ -262,7 +290,9 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     // Create session cookie
     let cookie;
     try {
-      cookie = await auth.createSessionCookie(idToken, { expiresIn: 5 * 24 * 60 * 60 * 1000 });
+      cookie = await auth.createSessionCookie(idToken, {
+        expiresIn: 5 * 24 * 60 * 60 * 1000,
+      });
     } catch (err) {
       console.error("Signup Error:", err);
       return res
@@ -309,7 +339,9 @@ export async function verifySession(req: Request, res: Response) {
     if (!sessionCookie) {
       return res
         .status(401)
-        .json(newErrorResponse("No Session", "No session found. Please log in."));
+        .json(
+          newErrorResponse("No Session", "No session found. Please log in.")
+        );
     }
 
     const app = getFirebaseApp();
@@ -324,7 +356,10 @@ export async function verifySession(req: Request, res: Response) {
       return res
         .status(401)
         .json(
-          newErrorResponse("Invalid Session", "Session is invalid or expired. Please log in again.")
+          newErrorResponse(
+            "Invalid Session",
+            "Session is invalid or expired. Please log in again."
+          )
         );
     }
 
@@ -368,11 +403,17 @@ export async function verifySession(req: Request, res: Response) {
       tierId: data.tierId,
       polarId: data.polarId,
       subscribed: data.subscribed ?? true,
-      createdAt: data.createdAt ? new Date(data.createdAt.seconds * 1000) : undefined,
-      updatedAt: data.updatedAt ? new Date(data.updatedAt.seconds * 1000) : undefined,
+      createdAt: data.createdAt
+        ? new Date(data.createdAt.seconds * 1000)
+        : undefined,
+      updatedAt: data.updatedAt
+        ? new Date(data.updatedAt.seconds * 1000)
+        : undefined,
     };
 
-    return res.status(200).json(newSuccessResponse("Session Valid", "Session is valid", user));
+    return res
+      .status(200)
+      .json(newSuccessResponse("Session Valid", "Session is valid", user));
   } catch (err) {
     console.error("Verify Session Error:", err);
     return res
@@ -397,8 +438,194 @@ export async function logout(req: Request, res: Response) {
     });
     return res
       .status(200)
-      .json(newSuccessResponse("Logout Successful", "User logged out successfully", null));
+      .json(
+        newSuccessResponse(
+          "Logout Successful",
+          "User logged out successfully",
+          null
+        )
+      );
   } finally {
     closeFirebaseApp();
+  }
+}
+
+export async function updateUsername(req: Request, res: Response) {
+  try {
+    const { username } = req.body;
+
+    // Enhanced input validation
+    if (
+      !username ||
+      typeof username !== "string" ||
+      username.length < 3 ||
+      username.length > 32 ||
+      !/^[a-zA-Z0-9_\- ]+$/.test(username) ||
+      username.startsWith('-') ||
+      username.endsWith('-') ||
+      username.startsWith(' ') ||
+      username.endsWith(' ') ||
+      username.includes('--') ||
+      username.includes('__') ||
+      username.includes('  ')
+    ) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Username",
+            "Username must be 3-32 characters, contain only letters, numbers, underscores, hyphens, or spaces, and cannot start/end with hyphens or spaces or contain consecutive special characters."
+          )
+        );
+    }
+
+    // Ensure userID and userEmail are present (set by authentication middleware)
+    if (!req.userID || !req.userEmail) {
+      return res
+        .status(401)
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to update your username."
+          )
+        );
+    }
+
+    // Check if this is a first-time user (no displayName)
+    const isFirstTimeUser = !req.userDisplayName || req.userDisplayName.trim() === '';
+
+    // Initialize Firebase
+    const app = getFirebaseApp();
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Update username in Firebase Auth
+    try {
+      await auth.updateUser(req.userID, { displayName: username });
+    } catch (authErr) {
+      console.error("Firebase Auth updateUser error:", authErr);
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "Auth Update Failed",
+            "Unable to update your username in authentication. Please contact support."
+          )
+        );
+    }
+
+    // Update username in Firestore
+    let userDoc;
+    try {
+      const usersRef = db.collection("users");
+      const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
+      const docs = await userQuery.get();
+      if (docs.empty) {
+        return res
+          .status(404)
+          .json(
+            newErrorResponse(
+              "User Not Found",
+              "Your user record could not be found. Please contact support."
+            )
+          );
+      }
+      userDoc = docs.docs[0];
+      if (!userDoc) {
+        return res
+          .status(404)
+          .json(
+            newErrorResponse(
+              "User Not Found",
+              "Your user record could not be found. Please contact support."
+            )
+          );
+      }
+      await userDoc.ref.update({ displayName: username });
+    } catch (firestoreErr) {
+      console.error("Firestore update error:", firestoreErr);
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "Database Update Failed",
+            "Unable to update your username in our database. Please contact support."
+          )
+        );
+    }
+
+    // Subscribe first-time users to mailing list (do not block on error)
+    if (isFirstTimeUser) {
+      try {
+        await subscribeUser(username, req.userEmail);
+      } catch (mailErr) {
+        console.error("Mailerlite subscribeUser error:", mailErr);
+      }
+    }
+
+    // Get updated user data for response
+    try {
+      const updatedUserRecord = await auth.getUser(req.userID);
+      const usersRef = db.collection("users");
+      const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
+      const docs = await userQuery.get();
+      const userDoc = docs.docs[0];
+      const userData = userDoc?.data();
+
+      const user = {
+        id: userDoc?.id,
+        userId: updatedUserRecord.uid,
+        email: updatedUserRecord.email,
+        displayName: updatedUserRecord.displayName,
+        tierId: userData?.tierId,
+        subscribed: userData?.subscribed ?? true,
+        createdAt: userData?.createdAt
+          ? new Date(userData.createdAt.seconds * 1000)
+          : undefined,
+        updatedAt: userData?.updatedAt
+          ? new Date(userData.updatedAt.seconds * 1000)
+          : undefined,
+      };
+
+      return res
+        .status(200)
+        .json(
+          newSuccessResponse(
+            "Username Updated",
+            "Username updated successfully. Please log in again to refresh your session with the new username.",
+            user
+          )
+        );
+    } catch (userErr) {
+      console.error("Error getting updated user data:", userErr);
+      return res
+        .status(200)
+        .json(
+          newSuccessResponse(
+            "Username Updated",
+            "Username updated successfully. Please log in again to refresh your session.",
+            null
+          )
+        );
+    }
+  } catch (err) {
+    // Avoid leaking sensitive error details to the client
+    console.error("Update Username Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Update Username Error",
+          "Unable to update your username. Please contact support if this continues."
+        )
+      );
+  } finally {
+    // Clean up Firebase app if needed
+    try {
+      closeFirebaseApp();
+    } catch (closeErr) {
+      // Log but do not throw
+      console.warn("Error closing Firebase app:", closeErr);
+    }
   }
 }

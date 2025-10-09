@@ -1,10 +1,12 @@
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
 import { strictRateLimiter } from "../middlewares/rateLimiter.middleware.ts";
+import { authMiddleware } from "../middlewares/auth.middleware.ts";
 import {
   login,
   logout,
   signupOrEnsureUser,
+  updateUsername,
   verifySession,
 } from "../controllers/auth.controller.ts";
 
@@ -123,5 +125,59 @@ authRouter.get("/verify", verifySession);
  *               $ref: '#/components/schemas/ApiResponse'
  */
 authRouter.post("/logout", logout);
+
+/**
+ * @openapi
+ * /api/v1/auth/update-username:
+ *   put:
+ *     summary: Update user username
+ *     description: Updates the user's display name/username. First-time users (those without a display name) will be automatically subscribed to the mailing list.
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - sessionCookie: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 description: New username (3-32 characters, alphanumeric, underscores, hyphens, spaces allowed)
+ *                 minLength: 3
+ *                 maxLength: 32
+ *                 pattern: '^[a-zA-Z0-9_\- ]+$'
+ *             required:
+ *               - username
+ *     responses:
+ *       200:
+ *         description: Username updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ *       400:
+ *         description: Invalid username format
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       429:
+ *         description: Rate limit exceeded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+authRouter.put("/update-username", strictRateLimiter(), authMiddleware, updateUsername);
 
 export default authRouter;
