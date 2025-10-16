@@ -375,7 +375,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
 
     // Send premium welcome email after successful subscription
     try {
-      const premiumResult = await sendPremiumWelcomeEmail(userID, false);
+      const premiumResult = await sendPremiumWelcomeEmail(userDoc.data()?.email as string, true);
       if (premiumResult.success) {
         console.log(`Premium welcome email sent successfully for user ${userID}`);
       } else {
