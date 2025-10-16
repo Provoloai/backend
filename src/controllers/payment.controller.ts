@@ -11,6 +11,7 @@ import {
 } from "../utils/quota.utils.ts";
 import type { Tier } from "../types/tiers.ts";
 import type { QuotaHistory } from "../types/quotas.ts";
+import { sendPremiumWelcomeEmail } from "../services/mailerlite.service.ts";
 
 // Default tier ID
 const DEFAULT_TIER_ID = process.env.DEFAULT_TIER_ID || "starter";
@@ -371,6 +372,18 @@ async function handleOrderUpdated(data: Record<string, any>) {
 
     // Update quota history using existing utility function
     await createQuotaHistoryFromTier(userID, tier.slug as any);
+
+    // Send premium welcome email after successful subscription
+    try {
+      const premiumResult = await sendPremiumWelcomeEmail(userID, false);
+      if (premiumResult.success) {
+        console.log(`Premium welcome email sent successfully for user ${userID}`);
+      } else {
+        console.warn(`Failed to send premium welcome email for user ${userID}:`, premiumResult.message);
+      }
+    } catch (emailError) {
+      console.error(`Error sending premium welcome email for user ${userID}:`, emailError);
+    }
   } else {
     // For non-paid statuses (refunded, canceled), potentially downgrade to starter
     // But only if the current tier matches the product being refunded/canceled

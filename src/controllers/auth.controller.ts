@@ -7,8 +7,7 @@ import { getCookie } from "../utils/getCookie.ts";
 import { createQuotaHistoryFromTier } from "../utils/quota.utils.ts";
 import { createPolarCustomer } from "../utils/polarClient.ts";
 
-// @ts-expect-error: No type definitions for mailerlite.config.js
-import { subscribeUser } from "../config/mailerlite.config.js";
+import { subscribeUser } from "../services/mailerlite.service.ts";
 
 export async function login(req: Request, res: Response) {
   try {
@@ -116,6 +115,7 @@ export async function login(req: Request, res: Response) {
       email: userRecord.email,
       displayName: userRecord.displayName,
       tierId: data.tierId,
+      mailerliteId: data.mailerliteId || null,
       subscribed: data.subscribed ?? true,
       createdAt: data.createdAt
         ? new Date(data.createdAt.seconds * 1000)
@@ -402,6 +402,7 @@ export async function verifySession(req: Request, res: Response) {
       photoURL: userRecord.photoURL,
       tierId: data.tierId,
       polarId: data.polarId,
+      mailerliteId: data.mailerliteId || null,
       subscribed: data.subscribed ?? true,
       createdAt: data.createdAt
         ? new Date(data.createdAt.seconds * 1000)
@@ -493,6 +494,7 @@ export async function updateUsername(req: Request, res: Response) {
 
     // Check if this is a first-time user (no displayName)
     const isFirstTimeUser = !req.userDisplayName || req.userDisplayName.trim() === '';
+    const now = new Date();
 
     // Initialize Firebase
     const app = getFirebaseApp();
@@ -557,7 +559,21 @@ export async function updateUsername(req: Request, res: Response) {
     // Subscribe first-time users to mailing list (do not block on error)
     if (isFirstTimeUser) {
       try {
-        await subscribeUser(username, req.userEmail);
+        const subscribeUserResult = await subscribeUser(username, req.userEmail);
+        console.log("Mailerlite subscribeUser result:", subscribeUserResult);
+        
+        // Store MailerLite subscriber ID in user table
+        if (subscribeUserResult.success && subscribeUserResult.data && subscribeUserResult.data.id) {
+          try {
+            await userDoc.ref.update({
+              mailerliteId: subscribeUserResult.data.id,
+              updatedAt: now,
+            });
+            console.log(`Stored MailerLite ID ${subscribeUserResult.data.id} for user ${req.userID}`);
+          } catch (dbErr) {
+            console.error("Failed to store MailerLite ID in user table:", dbErr);
+          }
+        }
       } catch (mailErr) {
         console.error("Mailerlite subscribeUser error:", mailErr);
       }
@@ -578,6 +594,7 @@ export async function updateUsername(req: Request, res: Response) {
         email: updatedUserRecord.email,
         displayName: updatedUserRecord.displayName,
         tierId: userData?.tierId,
+        mailerliteId: userData?.mailerliteId || null,
         subscribed: userData?.subscribed ?? true,
         createdAt: userData?.createdAt
           ? new Date(userData.createdAt.seconds * 1000)
