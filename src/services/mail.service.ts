@@ -26,6 +26,19 @@ interface WelcomeEmailData {
 
 // Create transporter instance
 const createTransporter = (): nodemailer.Transporter => {
+  // Debug environment variables
+  console.log("Email config check:", {
+    EMAIL_HOST: process.env.EMAIL_HOST ? "✅ Set" : "❌ Missing",
+    EMAIL_USER: process.env.EMAIL_USER ? "✅ Set" : "❌ Missing", 
+    EMAIL_PASS: process.env.EMAIL_PASS ? "✅ Set" : "❌ Missing",
+    EMAIL_FROM: process.env.EMAIL_FROM ? "✅ Set" : "❌ Missing"
+  });
+
+  // Validate required environment variables
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error("Missing required email credentials: EMAIL_USER and EMAIL_PASS must be set");
+  }
+
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: 465,
@@ -87,9 +100,24 @@ const sendMail = async (
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error("Error sending email:", error);
+    
+    // Provide more specific error messages
+    let errorMessage = "Unknown error";
+    if (error instanceof Error) {
+      if (error.message.includes("Missing credentials")) {
+        errorMessage = "Email credentials not configured. Please check EMAIL_USER and EMAIL_PASS environment variables.";
+      } else if (error.message.includes("EAUTH")) {
+        errorMessage = "Email authentication failed. Please check your email credentials.";
+      } else if (error.message.includes("ECONNECTION")) {
+        errorMessage = "Failed to connect to email server. Please check EMAIL_HOST and EMAIL_PORT.";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     };
   }
 };
