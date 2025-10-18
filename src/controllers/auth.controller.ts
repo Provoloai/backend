@@ -6,6 +6,7 @@ import { closeFirebaseApp, getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import { newSuccessResponse, newErrorResponse } from "../utils/apiResponse.ts";
 import { createQuotaHistoryFromTier } from "../utils/quota.utils.ts";
 import { createPolarCustomer } from "../utils/polarClient.ts";
+import { sendWelcomeEmail } from "../services/mail.service.ts";
 import { subscribeUser } from "../services/mailerlite.service.ts";
 
 // Types
@@ -556,38 +557,39 @@ export async function updateUsername(req: Request, res: Response) {
         );
     }
 
-    // Subscribe first-time users to mailing list (do not block on error)
+    // Send welcome email and subscribe to MailerLite for first-time users
     if (isFirstTimeUser) {
+      // Send welcome email
       try {
-        const subscribeUserResult = await subscribeUser(
-          username,
-          req.userEmail
-        );
-        console.log("Mailerlite subscribeUser result:", subscribeUserResult);
+        const emailResult = await sendWelcomeEmail({
+          name: username,
+          email: req.userEmail
+        });
 
-        // Store MailerLite subscriber ID in user table
-        if (
-          subscribeUserResult.success &&
-          subscribeUserResult.data &&
-          subscribeUserResult.data.data?.id
-        ) {
-          try {
-            await userDoc.ref.update({
-              mailerliteId: subscribeUserResult.data.data?.id,
-              updatedAt: now,
-            });
-            console.log(
-              `Stored MailerLite ID ${subscribeUserResult.data.data?.id} for user ${req.userID}`
-            );
-          } catch (dbErr) {
-            console.error(
-              "Failed to store MailerLite ID in user table:",
-              dbErr
-            );
-          }
+        if (emailResult.success) {
+          console.log(`Welcome email sent successfully to ${req.userEmail}`);
+        } else {
+          console.error(`Failed to send welcome email to ${req.userEmail}:`, emailResult.error);
         }
-      } catch (mailErr) {
-        console.error("Mailerlite subscribeUser error:", mailErr);
+      } catch (emailErr) {
+        console.error("Error sending welcome email:", emailErr);
+      }
+
+      // Subscribe to MailerLite for campaigns
+      try {
+        const subscribeUserResult = await subscribeUser(username, req.userEmail);
+
+        if (subscribeUserResult.success && subscribeUserResult.data?.data?.id) {
+          await userDoc.ref.update({
+            mailerliteId: subscribeUserResult.data.data.id,
+            updatedAt: now,
+          });
+          console.log(`User ${req.userID} subscribed to MailerLite with ID: ${subscribeUserResult.data.data.id}`);
+        } else {
+          console.warn(`Failed to subscribe user ${req.userID} to MailerLite:`, subscribeUserResult.message);
+        }
+      } catch (mailerliteErr) {
+        console.error("Error subscribing user to MailerLite:", mailerliteErr);
       }
     }
 

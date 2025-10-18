@@ -14,7 +14,7 @@ import {
 } from "../utils/quota.utils.ts";
 import type { Tier } from "../types/tiers.ts";
 import type { QuotaHistory } from "../types/quotas.ts";
-import { sendPremiumWelcomeEmail } from "../services/mailerlite.service.ts";
+import { sendPremiumWelcomeEmail } from "../services/mail.service.ts";
 
 // Default tier ID
 const DEFAULT_TIER_ID = process.env.DEFAULT_TIER_ID || "starter";
@@ -207,7 +207,12 @@ export async function paymentWebhook(req: Request, res: Response) {
     console.error("[paymentWebhook] Invalid JSON payload received:", err);
     res
       .status(400)
-      .json(newErrorResponse("Invalid Request", "Invalid payment webhook data format."));
+      .json(
+        newErrorResponse(
+          "Invalid Request",
+          "Invalid payment webhook data format."
+        )
+      );
   }
 }
 
@@ -410,10 +415,11 @@ async function handleOrderUpdated(data: Record<string, any>) {
 
     // Send premium welcome email after successful subscription
     try {
-      const premiumResult = await sendPremiumWelcomeEmail(
-        userDoc.data()?.email as string,
-        true
-      );
+      const userEmail = userDoc.data()?.email as string;
+      const userName = userDoc.data()?.displayName;
+
+      const premiumResult = await sendPremiumWelcomeEmail(userEmail, userName);
+
       if (premiumResult.success) {
         console.log(
           `Premium welcome email sent successfully for user ${userID}`
@@ -421,7 +427,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
       } else {
         console.warn(
           `Failed to send premium welcome email for user ${userID}:`,
-          premiumResult.message
+          premiumResult.error
         );
       }
     } catch (emailError) {
