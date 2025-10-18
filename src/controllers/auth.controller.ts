@@ -1,17 +1,24 @@
-import type { Request, Response } from "express";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+
+import { getCookie } from "../utils/getCookie.ts";
 import { closeFirebaseApp, getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import { newSuccessResponse, newErrorResponse } from "../utils/apiResponse.ts";
-import { getCookie } from "../utils/getCookie.ts";
 import { createQuotaHistoryFromTier } from "../utils/quota.utils.ts";
 import { createPolarCustomer } from "../utils/polarClient.ts";
-
 import { subscribeUser } from "../services/mailerlite.service.ts";
+
+// Types
+import type { NewUser, User } from "../types/user.ts";
+import type { Request, Response } from "express";
+import type { Timestamp } from "firebase-admin/firestore";
+import type { DecodedIdToken, UserRecord } from "firebase-admin/auth";
 
 export async function login(req: Request, res: Response) {
   try {
     const { idToken } = req.body;
+
+    // Validate request body
     if (!idToken) {
       return res
         .status(400)
@@ -23,12 +30,13 @@ export async function login(req: Request, res: Response) {
         );
     }
 
+    // Initialize Firebase
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
 
     // Verify ID token
-    let token;
+    let token: DecodedIdToken | null = null;
     try {
       token = await auth.verifyIdToken(idToken);
     } catch (err) {
@@ -68,25 +76,11 @@ export async function login(req: Request, res: Response) {
       httpOnly: true,
     });
 
-    // Get user info from Firebase Auth
-    let userRecord;
-    try {
-      userRecord = await auth.getUser(token.uid);
-    } catch (err) {
-      return res
-        .status(500)
-        .json(
-          newErrorResponse(
-            "User Info Failed",
-            "Unable to retrieve your account information. Please contact support if this continues."
-          )
-        );
-    }
-
-    // Get user data in Firestore (strict mode - don't auto-create for login)
+    // Get user data in Firestore
     const usersRef = db.collection("users");
     const userQuery = usersRef.where("userId", "==", token.uid).limit(1);
     const docs = await userQuery.get();
+
     if (docs.empty || docs.docs.length === 0) {
       return res
         .status(403)
@@ -97,6 +91,7 @@ export async function login(req: Request, res: Response) {
           )
         );
     }
+
     const doc = docs.docs[0];
     if (!doc) {
       return res
@@ -108,20 +103,25 @@ export async function login(req: Request, res: Response) {
           )
         );
     }
+
     const data = doc.data();
-    const user = {
+    const user: User = {
       id: doc.id,
-      userId: userRecord.uid,
-      email: userRecord.email,
-      displayName: userRecord.displayName,
+      userId: data.userId,
+      email: data.email,
+      displayName: data.displayName || null,
       tierId: data.tierId,
       mailerliteId: data.mailerliteId || null,
-      subscribed: data.subscribed ?? true,
+      polarId: data.polarId || null,
       createdAt: data.createdAt
-        ? new Date(data.createdAt.seconds * 1000)
+        ? data.createdAt instanceof Date
+          ? data.createdAt
+          : new Date((data.createdAt as Timestamp).seconds * 1000)
         : undefined,
       updatedAt: data.updatedAt
-        ? new Date(data.updatedAt.seconds * 1000)
+        ? data.updatedAt instanceof Date
+          ? data.updatedAt
+          : new Date((data.updatedAt as Timestamp).seconds * 1000)
         : undefined,
     };
 
@@ -151,6 +151,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     const starterTierId = process.env.STARTER_TIER_ID || "";
     const { idToken } = req.body;
 
+    // Validate request body
     if (!idToken)
       return res
         .status(400)
@@ -161,14 +162,15 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           )
         );
 
+    // Initialize Firebase
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
 
     // Verify ID token
-    let token;
+    let decodedUserInfo: DecodedIdToken | null = null;
     try {
-      token = await auth.verifyIdToken(idToken);
+      decodedUserInfo = (await auth.verifyIdToken(idToken)) as DecodedIdToken;
     } catch (err) {
       return res
         .status(401)
@@ -180,12 +182,12 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
     }
 
-    const userID = token.uid;
-    let userRecord;
+    const userID = decodedUserInfo.uid;
+    let userRecord: UserRecord | null = null;
 
-    // Get Firebase user record
+    // Get Firebase Auth UserRecord
     try {
-      userRecord = await auth.getUser(userID);
+      userRecord = (await auth.getUser(userID)) as UserRecord;
     } catch (err) {
       return res
         .status(500)
@@ -202,52 +204,53 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     const userQuery = usersRef.where("userId", "==", userID).limit(1);
     const docs = await userQuery.get();
 
-    let userData;
-    let isNewUser = false;
-    const now = new Date();
+    let userData: User | null = null;
+    let isNewUser: boolean = false;
+    const now: Date = new Date();
 
     if (!docs.empty && docs.docs.length > 0) {
       // User exists
-      const doc = docs.docs[0];
-      if (doc) {
-        const data = doc.data();
-        const userDataObj: any = {
-          id: doc.id,
+      const existingUserDoc = docs.docs[0];
+      if (existingUserDoc) {
+        const existingUserData: User = existingUserDoc.data() as User;
+        userData = {
+          id: existingUserDoc.id,
           userId: userID,
-          email: userRecord.email,
-          tierId: data.tierId || starterTierId,
-          subscribed: data.subscribed ?? true,
-          createdAt: data.createdAt
-            ? new Date(data.createdAt.seconds * 1000)
+          email: userRecord.email!,
+          displayName: userRecord.displayName || null,
+          tierId: existingUserData.tierId || starterTierId,
+          mailerliteId: null,
+          polarId: existingUserData.polarId || null,
+          createdAt: existingUserData.createdAt
+            ? existingUserData.createdAt instanceof Date
+              ? existingUserData.createdAt
+              : new Date(
+                  (existingUserData.createdAt as Timestamp).seconds * 1000
+                )
             : now,
-          updatedAt: data.updatedAt
-            ? new Date(data.updatedAt.seconds * 1000)
+          updatedAt: existingUserData.updatedAt
+            ? existingUserData.updatedAt instanceof Date
+              ? existingUserData.updatedAt
+              : new Date(
+                  (existingUserData.updatedAt as Timestamp).seconds * 1000
+                )
             : now,
         };
-
-        // Only add displayName if it exists
-        if (userRecord.displayName) {
-          userDataObj.displayName = userRecord.displayName;
-        }
-
-        userData = userDataObj;
       }
     } else {
       // Create new user
       isNewUser = true;
-      const newUserData: any = {
+      const newUserData: NewUser = {
         userId: userID,
-        email: userRecord.email,
+        email: userRecord.email!,
+        displayName: userRecord.displayName || null,
         tierId: starterTierId,
-        subscribed: true,
+        mailerliteId: null,
+        polarId: null,
         createdAt: now,
         updatedAt: now,
       };
 
-      // Only add displayName if it exists
-      if (userRecord.displayName) {
-        newUserData.displayName = userRecord.displayName;
-      }
       const docRef = await usersRef.add(newUserData);
       userData = {
         id: docRef.id,
@@ -268,14 +271,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           updatedAt: now,
         });
 
-        // Update userData for response (extend the type)
-        (userData as any).polarId = polarCustomerResult.id;
-
-        console.log(
-          `Created Polar customer for new user ${userID}: ${
-            polarCustomerResult.id
-          } (${polarCustomerResult.created ? "new" : "existing"})`
-        );
+        userData.polarId = polarCustomerResult.id;
       } catch (error) {
         console.error(
           `Failed to create Polar customer for new user ${userID}:`,
@@ -284,7 +280,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       }
 
       // Create quota history for new users
-      await createQuotaHistoryFromTier(userID, starterTierId as any, false);
+      await createQuotaHistoryFromTier(userID, starterTierId, false);
     }
 
     // Create session cookie
@@ -315,7 +311,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     });
 
     const message = isNewUser
-      ? "New user created with starter tier and quota history"
+      ? "Signup successful! Your account has been created."
       : "User profile retrieved";
 
     const action = isNewUser ? "Signup Successful" : "Login Successful";
@@ -349,9 +345,9 @@ export async function verifySession(req: Request, res: Response) {
     const db = getFirestore(app);
 
     // Verify session cookie
-    let token;
+    let decodedUserInfo: DecodedIdToken | null = null;
     try {
-      token = await auth.verifySessionCookie(sessionCookie, true);
+      decodedUserInfo = await auth.verifySessionCookie(sessionCookie, true);
     } catch (err) {
       return res
         .status(401)
@@ -363,24 +359,9 @@ export async function verifySession(req: Request, res: Response) {
         );
     }
 
-    // Get user info from Firebase Auth
-    let userRecord;
-    try {
-      userRecord = await auth.getUser(token.uid);
-    } catch (err) {
-      return res
-        .status(500)
-        .json(
-          newErrorResponse(
-            "User Info Failed",
-            "Unable to retrieve your account information. Please contact support if this continues."
-          )
-        );
-    }
-
-    // Get user data in Firestore (strict mode - don't auto-create for verify)
+    // Get user data in Firestore
     const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", token.uid).limit(1);
+    const userQuery = usersRef.where("userId", "==", decodedUserInfo.uid).limit(1);
     const docs = await userQuery.get();
     const doc = docs.docs[0];
     if (!doc) {
@@ -394,21 +375,23 @@ export async function verifySession(req: Request, res: Response) {
         );
     }
     const data = doc.data();
-    const user = {
+    const user: User = {
       id: doc.id,
-      userId: userRecord.uid,
-      email: userRecord.email,
-      displayName: userRecord.displayName,
-      photoURL: userRecord.photoURL,
+      userId: data.userId,
+      email: data.email,
+      displayName: data.displayName || null,
       tierId: data.tierId,
-      polarId: data.polarId,
+      polarId: data.polarId || null,
       mailerliteId: data.mailerliteId || null,
-      subscribed: data.subscribed ?? true,
       createdAt: data.createdAt
-        ? new Date(data.createdAt.seconds * 1000)
+        ? data.createdAt instanceof Date
+          ? data.createdAt
+          : new Date((data.createdAt as Timestamp).seconds * 1000)
         : undefined,
       updatedAt: data.updatedAt
-        ? new Date(data.updatedAt.seconds * 1000)
+        ? data.updatedAt instanceof Date
+          ? data.updatedAt
+          : new Date((data.updatedAt as Timestamp).seconds * 1000)
         : undefined,
     };
 
@@ -430,6 +413,9 @@ export async function verifySession(req: Request, res: Response) {
 
 export async function logout(req: Request, res: Response) {
   try {
+    const sessionCookie = getCookie(req, "session");
+    
+    // Clear the session cookie first
     res.cookie("session", "", {
       maxAge: -1,
       path: "/",
@@ -437,6 +423,24 @@ export async function logout(req: Request, res: Response) {
       secure: true,
       httpOnly: true,
     });
+
+    // If we have a session cookie, revoke it on Firebase
+    if (sessionCookie) {
+      try {
+        const app = getFirebaseApp();
+        const auth = getAuth(app);
+        
+        // Verify the session to get the UID
+        const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
+        
+        // Revoke all refresh tokens for this user
+        await auth.revokeRefreshTokens(decodedToken.uid);
+      } catch (err) {
+        // Log the error but don't fail the logout
+        console.error("Failed to revoke Firebase session:", err);
+      }
+    }
+
     return res
       .status(200)
       .json(
@@ -455,32 +459,30 @@ export async function updateUsername(req: Request, res: Response) {
   try {
     const { username } = req.body;
 
-    // Enhanced input validation
+    // Validate username
     if (
       !username ||
       typeof username !== "string" ||
       username.length < 3 ||
-      username.length > 32 ||
       !/^[a-zA-Z0-9_\- ]+$/.test(username) ||
-      username.startsWith('-') ||
-      username.endsWith('-') ||
-      username.startsWith(' ') ||
-      username.endsWith(' ') ||
-      username.includes('--') ||
-      username.includes('__') ||
-      username.includes('  ')
+      username.startsWith("-") ||
+      username.endsWith("-") ||
+      username.startsWith(" ") ||
+      username.endsWith(" ") ||
+      username.includes("--") ||
+      username.includes("__")
     ) {
       return res
         .status(400)
         .json(
           newErrorResponse(
             "Invalid Username",
-            "Username must be 3-32 characters, contain only letters, numbers, underscores, hyphens, or spaces, and cannot start/end with hyphens or spaces or contain consecutive special characters."
+            "Username must be at least 3, use only letters, numbers, underscores, hyphens, or spaces, cannot start or end with hyphens or spaces, and cannot contain consecutive hyphens or consecutive underscores."
           )
         );
     }
 
-    // Ensure userID and userEmail are present (set by authentication middleware)
+    // Ensure userID and userEmail are present
     if (!req.userID || !req.userEmail) {
       return res
         .status(401)
@@ -493,7 +495,8 @@ export async function updateUsername(req: Request, res: Response) {
     }
 
     // Check if this is a first-time user (no displayName)
-    const isFirstTimeUser = !req.userDisplayName || req.userDisplayName.trim() === '';
+    const isFirstTimeUser =
+      !req.userDisplayName || req.userDisplayName.trim() === "";
     const now = new Date();
 
     // Initialize Firebase
@@ -522,7 +525,8 @@ export async function updateUsername(req: Request, res: Response) {
       const usersRef = db.collection("users");
       const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
       const docs = await userQuery.get();
-      if (docs.empty) {
+
+      if (docs.empty || !docs.docs[0]) {
         return res
           .status(404)
           .json(
@@ -532,17 +536,8 @@ export async function updateUsername(req: Request, res: Response) {
             )
           );
       }
+      
       userDoc = docs.docs[0];
-      if (!userDoc) {
-        return res
-          .status(404)
-          .json(
-            newErrorResponse(
-              "User Not Found",
-              "Your user record could not be found. Please contact support."
-            )
-          );
-      }
       await userDoc.ref.update({ displayName: username });
     } catch (firestoreErr) {
       console.error("Firestore update error:", firestoreErr);
@@ -559,19 +554,31 @@ export async function updateUsername(req: Request, res: Response) {
     // Subscribe first-time users to mailing list (do not block on error)
     if (isFirstTimeUser) {
       try {
-        const subscribeUserResult = await subscribeUser(username, req.userEmail);
+        const subscribeUserResult = await subscribeUser(
+          username,
+          req.userEmail
+        );
         console.log("Mailerlite subscribeUser result:", subscribeUserResult);
-        
+
         // Store MailerLite subscriber ID in user table
-        if (subscribeUserResult.success && subscribeUserResult.data && subscribeUserResult.data.id) {
+        if (
+          subscribeUserResult.success &&
+          subscribeUserResult.data &&
+          subscribeUserResult.data.id
+        ) {
           try {
             await userDoc.ref.update({
               mailerliteId: subscribeUserResult.data.id,
               updatedAt: now,
             });
-            console.log(`Stored MailerLite ID ${subscribeUserResult.data.id} for user ${req.userID}`);
+            console.log(
+              `Stored MailerLite ID ${subscribeUserResult.data.id} for user ${req.userID}`
+            );
           } catch (dbErr) {
-            console.error("Failed to store MailerLite ID in user table:", dbErr);
+            console.error(
+              "Failed to store MailerLite ID in user table:",
+              dbErr
+            );
           }
         }
       } catch (mailErr) {
@@ -581,26 +588,34 @@ export async function updateUsername(req: Request, res: Response) {
 
     // Get updated user data for response
     try {
-      const updatedUserRecord = await auth.getUser(req.userID);
       const usersRef = db.collection("users");
       const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
       const docs = await userQuery.get();
+      
+      if (docs.empty || !docs.docs[0]) {
+        throw new Error("User document not found after username update.");
+      }
+      
       const userDoc = docs.docs[0];
-      const userData = userDoc?.data();
-
-      const user = {
-        id: userDoc?.id,
-        userId: updatedUserRecord.uid,
-        email: updatedUserRecord.email,
-        displayName: updatedUserRecord.displayName,
-        tierId: userData?.tierId,
-        mailerliteId: userData?.mailerliteId || null,
-        subscribed: userData?.subscribed ?? true,
-        createdAt: userData?.createdAt
-          ? new Date(userData.createdAt.seconds * 1000)
+      const userData = userDoc.data();
+      
+      const user: User = {
+        id: userDoc.id,
+        userId: userData.userId,
+        email: userData.email,
+        displayName: userData.displayName || null,
+        tierId: userData.tierId,
+        polarId: userData.polarId || null,
+        mailerliteId: userData.mailerliteId || null,
+        createdAt: userData.createdAt
+          ? userData.createdAt instanceof Date
+            ? userData.createdAt
+            : new Date((userData.createdAt as Timestamp).seconds * 1000)
           : undefined,
-        updatedAt: userData?.updatedAt
-          ? new Date(userData.updatedAt.seconds * 1000)
+        updatedAt: userData.updatedAt
+          ? userData.updatedAt instanceof Date
+            ? userData.updatedAt
+            : new Date((userData.updatedAt as Timestamp).seconds * 1000)
           : undefined,
       };
 
@@ -626,7 +641,6 @@ export async function updateUsername(req: Request, res: Response) {
         );
     }
   } catch (err) {
-    // Avoid leaking sensitive error details to the client
     console.error("Update Username Error:", err);
     return res
       .status(500)
@@ -637,12 +651,6 @@ export async function updateUsername(req: Request, res: Response) {
         )
       );
   } finally {
-    // Clean up Firebase app if needed
-    try {
-      closeFirebaseApp();
-    } catch (closeErr) {
-      // Log but do not throw
-      console.warn("Error closing Firebase app:", closeErr);
-    }
+    closeFirebaseApp();
   }
 }

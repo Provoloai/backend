@@ -1,6 +1,9 @@
 import type { Request, Response } from "express";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import type { DocumentSnapshot, DocumentReference } from "firebase-admin/firestore";
+import type {
+  DocumentSnapshot,
+  DocumentReference,
+} from "firebase-admin/firestore";
 import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
 import {
@@ -21,11 +24,10 @@ export async function getPaymentTiers(req: Request, res: Response) {
     const app = getFirebaseApp();
     const db = getFirestore(app);
 
-    // Query all tiers from the "tiers" collection
-    const snapshot = await db.collection("tiers").get();
+    const tiersSnapshot = await db.collection("tiers").get();
 
     const tiers: Tier[] = [];
-    snapshot.forEach((doc) => {
+    tiersSnapshot.forEach((doc) => {
       const data = doc.data() as Tier;
       tiers.push(data);
     });
@@ -33,21 +35,25 @@ export async function getPaymentTiers(req: Request, res: Response) {
     // Sort tiers by price (ascending)
     tiers.sort((a, b) => a.price - b.price);
 
-    // Return success response with tiers
-    const response = newSuccessResponse(
-      "Payment Tiers",
-      "Payment tiers retrieved successfully",
-      tiers
-    );
-
-    res.status(200).json(response);
+    res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Payment Tiers",
+          "Payment tiers retrieved successfully",
+          tiers
+        )
+      );
   } catch (err: any) {
     console.error("[getPaymentTiers] Failed to retrieve payment tiers:", err);
-    const errorResponse = newErrorResponse(
-      "Service Error",
-      "Unable to retrieve pricing information. Please contact support if this continues."
-    );
-    res.status(500).json(errorResponse);
+    res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Service Error",
+          "Unable to retrieve pricing information. Please contact support if this continues."
+        )
+      );
   }
 }
 
@@ -56,42 +62,53 @@ export async function getPaymentTierBySlug(req: Request, res: Response) {
     const slug = req.params.slug;
 
     if (!slug) {
-      const errorResponse = newErrorResponse("Invalid Request", "Tier slug is required");
-      return res.status(400).json(errorResponse);
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Tier slug is required"));
     }
 
     const app = getFirebaseApp();
     const db = getFirestore(app);
 
     // Query tier by slug
-    const snapshot = await db.collection("tiers").where("slug", "==", slug).limit(1).get();
+    const tierSnapshot = await db
+      .collection("tiers")
+      .where("slug", "==", slug)
+      .limit(1)
+      .get();
 
-    if (snapshot.empty) {
-      const errorResponse = newErrorResponse("Tier Not Found", `No tier found with slug: ${slug}`);
-      return res.status(404).json(errorResponse);
+    if (tierSnapshot.empty || !tierSnapshot.docs[0]) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse("Tier Not Found", `No tier found with slug: ${slug}`)
+        );
     }
 
-    const doc = snapshot.docs[0]!;
-    const tier = doc.data() as Tier;
+    const tier = tierSnapshot.docs[0]!.data() as Tier;
 
-    // Return success response with tier
-    const response = newSuccessResponse(
-      "Payment Tier",
-      "Payment tier retrieved successfully",
-      tier
-    );
-
-    res.status(200).json(response);
+    res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Payment Tier",
+          "Payment tier retrieved successfully",
+          tier
+        )
+      );
   } catch (err: any) {
     console.error(
       `[getPaymentTierBySlug] Failed to retrieve payment tier (${req.params.slug}):`,
       err
     );
-    const errorResponse = newErrorResponse(
-      "Service Error",
-      "Unable to retrieve pricing information. Please contact support if this continues."
-    );
-    res.status(500).json(errorResponse);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Service Error",
+          "Unable to retrieve pricing information. Please contact support if this continues."
+        )
+      );
   }
 }
 
@@ -100,13 +117,13 @@ export async function paymentWebhook(req: Request, res: Response) {
     // Handle completely dynamic JSON data - accepts any structure
     const webhookData: Record<string, any> = req.body;
 
-    // Log webhookData as JSON
-    try {
-      const webhookJSON = JSON.stringify(webhookData, null, 2);
-      console.log("Payment Webhook received:", webhookJSON);
-    } catch (err) {
-      console.log("Payment Webhook received (stringify error):", webhookData);
-    }
+    // // Log webhookData as JSON
+    // try {
+    //   const webhookJSON = JSON.stringify(webhookData, null, 2);
+    //   console.log("Payment Webhook received:", webhookJSON);
+    // } catch (err) {
+    //   console.log("Payment Webhook received (stringify error):", webhookData);
+    // }
 
     // Extract event type and data
     const eventType = webhookData.type as string;
@@ -146,16 +163,12 @@ export async function paymentWebhook(req: Request, res: Response) {
       events[eventType] = data;
 
       // Ensure updated_at is always set (never undefined)
-      let safeUpdatedAt = updatedAt;
-      if (safeUpdatedAt === undefined) {
-        safeUpdatedAt = new Date().toISOString();
-      }
       await docRef.set(
         {
           checkout_id: checkoutID,
           current_status: status,
-          created_at: createdAt,
-          updated_at: safeUpdatedAt,
+          created_at: createdAt || new Date().toISOString(),
+          updated_at: updatedAt || new Date().toISOString(),
           events: events,
         },
         { merge: true }
@@ -180,20 +193,21 @@ export async function paymentWebhook(req: Request, res: Response) {
       }
 
       // Return success using the standard APIResponse pattern
-      const resp = newSuccessResponse(
-        "Payment Webhook",
-        "Webhook received and processed successfully - any data structure accepted",
-        webhookData
-      );
-      res.status(200).json(resp);
+      res
+        .status(200)
+        .json(
+          newSuccessResponse(
+            "Payment Webhook",
+            "Webhook received and processed successfully - any data structure accepted",
+            webhookData
+          )
+        );
     }
   } catch (err: any) {
     console.error("[paymentWebhook] Invalid JSON payload received:", err);
-    const errorResponse = newErrorResponse(
-      "Invalid Request",
-      "Invalid payment webhook data format."
-    );
-    res.status(400).json(errorResponse);
+    res
+      .status(400)
+      .json(newErrorResponse("Invalid Request", "Invalid payment webhook data format."));
   }
 }
 
@@ -221,7 +235,11 @@ export async function archiveExpiredSubscriptions(req: Request, res: Response) {
     await db.collection("quota_history").doc(userId).delete();
 
     // Downgrade user to starter tier and clear pending_archive
-    const userQuerySnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+    const userQuerySnap = await db
+      .collection("users")
+      .where("userId", "==", userId)
+      .limit(1)
+      .get();
     if (!userQuerySnap.empty && userQuerySnap.docs[0]) {
       const userDocRef = userQuerySnap.docs[0].ref;
       await userDocRef.update({
@@ -232,8 +250,8 @@ export async function archiveExpiredSubscriptions(req: Request, res: Response) {
       console.warn(`User with userId ${userId} not found for tier downgrade.`);
     }
 
-    // Create new quota history for starter tier (pass overrideTierId to ensure correct tier)
-    await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID as any, true, DEFAULT_TIER_ID);
+    // Create new quota history for starter tier
+    await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID, true);
 
     archivedCount++;
     console.log(`Archived quota for user ${userId}`);
@@ -299,7 +317,10 @@ async function handleOrderUpdated(data: Record<string, any>) {
   // Check for double processing - look for existing order with same product_id and status
   const checkoutID = data.checkout_id as string;
   if (checkoutID) {
-    const billingDoc = await db.collection("billing_history").doc(checkoutID).get();
+    const billingDoc = await db
+      .collection("billing_history")
+      .doc(checkoutID)
+      .get();
     if (billingDoc.exists) {
       const events = billingDoc.data()?.events as Record<string, any>;
       if (events && events["order.updated"]) {
@@ -313,7 +334,10 @@ async function handleOrderUpdated(data: Record<string, any>) {
   }
 
   // Find tier by product_id (polarRefId)
-  const tierQuery = db.collection("tiers").where("polarRefId", "==", productID).limit(1);
+  const tierQuery = db
+    .collection("tiers")
+    .where("polarRefId", "==", productID)
+    .limit(1);
   const tierDocs = await tierQuery.get();
   if (tierDocs.empty) {
     throw new Error(`no tier found with polarRefId: ${productID}`);
@@ -328,7 +352,10 @@ async function handleOrderUpdated(data: Record<string, any>) {
 
   if (userID) {
     // Query by userId field
-    const userQuery = db.collection("users").where("userId", "==", userID).limit(1);
+    const userQuery = db
+      .collection("users")
+      .where("userId", "==", userID)
+      .limit(1);
     const userDocs = await userQuery.get();
     if (!userDocs.empty) {
       userDoc = userDocs.docs[0]!;
@@ -338,7 +365,10 @@ async function handleOrderUpdated(data: Record<string, any>) {
 
   if (!userDoc && customerEmail) {
     // Query by email field
-    const userQuery = db.collection("users").where("email", "==", customerEmail).limit(1);
+    const userQuery = db
+      .collection("users")
+      .where("email", "==", customerEmail)
+      .limit(1);
     const userDocs = await userQuery.get();
     if (!userDocs.empty) {
       userDoc = userDocs.docs[0]!;
@@ -352,7 +382,9 @@ async function handleOrderUpdated(data: Record<string, any>) {
   }
 
   if (!userDoc) {
-    throw new Error(`user not found with userID: ${userID} or email: ${customerEmail}`);
+    throw new Error(
+      `user not found with userID: ${userID} or email: ${customerEmail}`
+    );
   }
 
   // Only update tier if status indicates a paid subscription
@@ -367,22 +399,36 @@ async function handleOrderUpdated(data: Record<string, any>) {
     try {
       await archiveQuotaHistory(userID);
     } catch (err) {
-      console.warn(`Warning: Failed to archive quota history for user ${userID}:`, err);
+      console.warn(
+        `Warning: Failed to archive quota history for user ${userID}:`,
+        err
+      );
     }
 
     // Update quota history using existing utility function
-    await createQuotaHistoryFromTier(userID, tier.slug as any);
+    await createQuotaHistoryFromTier(userID, tier.slug);
 
     // Send premium welcome email after successful subscription
     try {
-      const premiumResult = await sendPremiumWelcomeEmail(userDoc.data()?.email as string, true);
+      const premiumResult = await sendPremiumWelcomeEmail(
+        userDoc.data()?.email as string,
+        true
+      );
       if (premiumResult.success) {
-        console.log(`Premium welcome email sent successfully for user ${userID}`);
+        console.log(
+          `Premium welcome email sent successfully for user ${userID}`
+        );
       } else {
-        console.warn(`Failed to send premium welcome email for user ${userID}:`, premiumResult.message);
+        console.warn(
+          `Failed to send premium welcome email for user ${userID}:`,
+          premiumResult.message
+        );
       }
     } catch (emailError) {
-      console.error(`Error sending premium welcome email for user ${userID}:`, emailError);
+      console.error(
+        `Error sending premium welcome email for user ${userID}:`,
+        emailError
+      );
     }
   } else {
     // For non-paid statuses (refunded, canceled), potentially downgrade to starter
@@ -407,7 +453,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
       });
 
       // Update quota history for starter tier
-      await createQuotaHistoryFromTier(userID, DEFAULT_TIER_ID as any);
+      await createQuotaHistoryFromTier(userID, DEFAULT_TIER_ID);
     } else {
       console.log(
         `User ${userID} tier not affected by ${status} status (current tier: ${currentTierID}, order tier: ${tier.slug})`

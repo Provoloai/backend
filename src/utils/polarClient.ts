@@ -3,9 +3,15 @@ import { Polar } from "@polar-sh/sdk";
 
 export type PolarServer = "sandbox" | "production";
 
-export function createPolar(options?: { accessToken?: string; server?: PolarServer }) {
-  const accessToken = options?.accessToken ?? process.env.POLAR_ACCESS_TOKEN ?? "";
-  const server = (options?.server ?? (process.env.POLAR_SERVER as PolarServer)) || "production";
+export function createPolar(options?: {
+  accessToken?: string;
+  server?: PolarServer;
+}) {
+  const accessToken =
+    options?.accessToken ?? process.env.POLAR_ACCESS_TOKEN ?? "";
+  const server =
+    (options?.server ?? (process.env.POLAR_SERVER as PolarServer)) ||
+    "production";
   return new Polar({ accessToken: accessToken.trim(), server });
 }
 
@@ -69,7 +75,9 @@ export async function createPolarCustomer({
   } catch (error: any) {
     // If customer already exists, try to find them by email
     if (error.detail?.[0]?.msg?.includes("already exists")) {
-      console.log(`Customer with email ${email} already exists, looking up existing customer...`);
+      console.log(
+        `Customer with email ${email} already exists, looking up existing customer...`
+      );
 
       const existingCustomers = (await polar.customers.list({
         organizationId: organizationId,
@@ -77,7 +85,10 @@ export async function createPolarCustomer({
         limit: 1,
       })) as any;
 
-      if (existingCustomers.result?.items && existingCustomers.result.items.length > 0) {
+      if (
+        existingCustomers.result?.items &&
+        existingCustomers.result.items.length > 0
+      ) {
         const existingCustomer = existingCustomers.result.items[0];
         console.log(`Found existing customer: ${existingCustomer.id}`);
 
@@ -86,7 +97,9 @@ export async function createPolarCustomer({
           created: false,
         };
       } else {
-        throw new Error(`Customer with email ${email} already exists but could not be found`);
+        throw new Error(
+          `Customer with email ${email} already exists but could not be found`
+        );
       }
     } else {
       throw error;

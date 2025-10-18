@@ -4,6 +4,9 @@ import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import { newErrorResponse } from "../utils/apiResponse.ts";
 import { getCookie } from "../utils/getCookie.ts";
 
+// Types
+import type { DecodedIdToken } from "firebase-admin/auth";
+
 // Extend Express Request interface to include custom user properties
 declare global {
   namespace Express {
@@ -19,7 +22,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   const app = getFirebaseApp();
   const auth = getAuth(app);
 
-  let token;
+  let token: DecodedIdToken;
   try {
     // Try session cookie first
     const sessionCookie = getCookie(req, "session");

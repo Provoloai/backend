@@ -58,10 +58,24 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
-    const quotaDoc = await db.collection("quota_history").doc(userId).get();
+    let quotaDoc = await db.collection("quota_history").doc(userId).get();
+    
+    // If quota history doesn't exist, create it first
     if (!quotaDoc.exists) {
-      // Seed quota history from tier
-      return await createQuotaHistoryFromTier(userId, slug);
+      // Get user's tier and create quota history
+      const userQuery = db.collection("users").where("userId", "==", userId).limit(1);
+      const userSnap = await userQuery.get();
+      if (userSnap.empty) throw new Error(`User not found: ${userId}`);
+      
+      const userDoc = userSnap.docs[0];
+      if (!userDoc) throw new Error(`User document not found: ${userId}`);
+      
+      const user = userDoc.data();
+      const tierId = user.tierId || process.env.DEFAULT_TIER_ID || "starter";
+      await createQuotaHistoryFromTier(userId, tierId);
+      
+      // Fetch the newly created quota document
+      quotaDoc = await db.collection("quota_history").doc(userId).get();
     }
     const quotaHistory = quotaDoc.data() as QuotaHistory;
     const feature = quotaHistory.features.find((f: QuotaFeature) => f.slug === slug);
@@ -90,37 +104,27 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
   }
 }
 
-// Seed quota history for a user from their tier
+// Create quota history for a user from their tier
 export async function createQuotaHistoryFromTier(
   userId: string,
-  slug: FeatureSlug,
-  closeApp: boolean = true,
-  overrideTierId?: string
+  tierId: string,
+  closeApp: boolean = true
 ) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
-    // Get user doc by querying userId field (not document ID)
-    const userQuery = db.collection("users").where("userId", "==", userId).limit(1);
-    const userSnap = await userQuery.get();
-
-    if (userSnap.empty) throw new Error(`User not found: ${userId}`);
-
-    const userDoc = userSnap.docs[0];
-    if (!userDoc) throw new Error(`User document not found: ${userId}`);
-
-    const user = userDoc.data();
-    const tierId = overrideTierId || user.tierId || process.env.DEFAULT_TIER_ID || "starter";
     // Get tier doc
     const tierSnap = await db.collection("tiers").doc(tierId).get();
     if (!tierSnap.exists) throw new Error(`Tier not found: ${tierId}`);
     const tier = tierSnap.data() as Tier;
+    
     // Build features
     const features = (tier.features || []).map((f: any) => ({
       ...f,
       usageCount: 0,
       lastUsed: null,
     }));
+    
     const now = new Date();
     const quotaHistory: QuotaHistory = {
       userId,
@@ -130,15 +134,10 @@ export async function createQuotaHistoryFromTier(
       createdAt: now,
       updatedAt: now,
     };
+    
     await db.collection("quota_history").doc(userId).set(quotaHistory);
-    const target = features.find((f: QuotaFeature) => f.slug === slug);
-    const targetLimit = target?.maxQuota ?? 0;
-
-    return {
-      allowed: targetLimit === -1 || 0 < targetLimit, // Always allow if unlimited (-1) or if there's quota
-      count: 0,
-      limit: targetLimit,
-    };
+    
+    return quotaHistory;
   } finally {
     if (closeApp) {
       closeFirebaseApp();
@@ -357,6 +356,6 @@ export async function updateQuotaHistoryForRevokedSubscription(
     { merge: true }
   );
   // Create new quota history for starter tier
-  await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID as any);
+  await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID);
   console.log(`User ${userId} downgraded and quota archived due to subscription.revoked`);
 }
