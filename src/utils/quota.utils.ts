@@ -347,14 +347,20 @@ export async function updateQuotaHistoryForRevokedSubscription(
     await db.collection("quota_history").doc(userId).delete();
     console.log(`Archived quota for user ${userId}`);
   }
+  
   // Downgrade user to starter tier
-  await db.collection("users").doc(userId).set(
-    {
+  const usersRef = db.collection("users");
+  const userQuery = usersRef.where("userId", "==", userId).limit(1);
+  const userDocs = await userQuery.get();
+  
+  if (!userDocs.empty && userDocs.docs[0]) {
+    await userDocs.docs[0].ref.update({
       tierId: DEFAULT_TIER_ID,
       updatedAt: new Date(),
-    },
-    { merge: true }
-  );
+    });
+  } else {
+    console.error(`User with userId ${userId} not found for tier downgrade`);
+  }
   // Create new quota history for starter tier
   await createQuotaHistoryFromTier(userId, DEFAULT_TIER_ID);
   console.log(`User ${userId} downgraded and quota archived due to subscription.revoked`);

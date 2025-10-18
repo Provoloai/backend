@@ -361,7 +361,9 @@ export async function verifySession(req: Request, res: Response) {
 
     // Get user data in Firestore
     const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", decodedUserInfo.uid).limit(1);
+    const userQuery = usersRef
+      .where("userId", "==", decodedUserInfo.uid)
+      .limit(1);
     const docs = await userQuery.get();
     const doc = docs.docs[0];
     if (!doc) {
@@ -414,7 +416,7 @@ export async function verifySession(req: Request, res: Response) {
 export async function logout(req: Request, res: Response) {
   try {
     const sessionCookie = getCookie(req, "session");
-    
+
     // Clear the session cookie first
     res.cookie("session", "", {
       maxAge: -1,
@@ -429,10 +431,13 @@ export async function logout(req: Request, res: Response) {
       try {
         const app = getFirebaseApp();
         const auth = getAuth(app);
-        
+
         // Verify the session to get the UID
-        const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
-        
+        const decodedToken = await auth.verifySessionCookie(
+          sessionCookie,
+          true
+        );
+
         // Revoke all refresh tokens for this user
         await auth.revokeRefreshTokens(decodedToken.uid);
       } catch (err) {
@@ -536,7 +541,7 @@ export async function updateUsername(req: Request, res: Response) {
             )
           );
       }
-      
+
       userDoc = docs.docs[0];
       await userDoc.ref.update({ displayName: username });
     } catch (firestoreErr) {
@@ -564,15 +569,15 @@ export async function updateUsername(req: Request, res: Response) {
         if (
           subscribeUserResult.success &&
           subscribeUserResult.data &&
-          subscribeUserResult.data.id
+          subscribeUserResult.data.data?.id
         ) {
           try {
             await userDoc.ref.update({
-              mailerliteId: subscribeUserResult.data.id,
+              mailerliteId: subscribeUserResult.data.data?.id,
               updatedAt: now,
             });
             console.log(
-              `Stored MailerLite ID ${subscribeUserResult.data.id} for user ${req.userID}`
+              `Stored MailerLite ID ${subscribeUserResult.data.data?.id} for user ${req.userID}`
             );
           } catch (dbErr) {
             console.error(
@@ -591,14 +596,14 @@ export async function updateUsername(req: Request, res: Response) {
       const usersRef = db.collection("users");
       const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
       const docs = await userQuery.get();
-      
+
       if (docs.empty || !docs.docs[0]) {
         throw new Error("User document not found after username update.");
       }
-      
+
       const userDoc = docs.docs[0];
       const userData = userDoc.data();
-      
+
       const user: User = {
         id: userDoc.id,
         userId: userData.userId,

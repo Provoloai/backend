@@ -37,9 +37,13 @@ export async function migratePromptQuota() {
     // Resolve tier for user (fallback to default)
     let tierId = defaultTierId;
     try {
-      const userDoc = await db.collection("users").doc(userId).get();
-      if (userDoc.exists) {
-        const t = (userDoc.data() as DocumentData)?.tierId;
+      const usersRef = db.collection("users");
+      const userQuery = usersRef.where("userId", "==", userId).limit(1);
+      const userDocs = await userQuery.get();
+      
+      if (!userDocs.empty && userDocs.docs[0]) {
+        const userData = userDocs.docs[0].data();
+        const t = userData?.tierId;
         if (typeof t === "string" && t.length > 0) tierId = t;
       }
     } catch (e) {
