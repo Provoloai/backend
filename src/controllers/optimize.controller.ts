@@ -10,7 +10,7 @@ import {
 import { updateUserQuota, checkUserQuota } from "../utils/quota.utils.ts";
 import { callGemini } from "../utils/geminiClient.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
-import type { ProposalReq, ProposalResponse } from "../types/proposal.types.ts";
+import type { ProposalReq, ProposalResponse, AIErrorResponse } from "../types/proposal.types.ts";
 
 interface PromptReq {
   full_name: string;
@@ -293,7 +293,6 @@ export async function generateProposal(req: Request, res: Response) {
     let quotaResult;
     try {
       quotaResult = await checkUserQuota(userId, "ai_proposals");
-      console.log("Quota result for user", userId, ":", quotaResult);
     } catch (err: any) {
       console.error("[generateProposal] Quota check error:", err);
       return res
@@ -370,9 +369,57 @@ export async function generateProposal(req: Request, res: Response) {
     }
 
     // 6. Parse AI response
-    let parsedResponse: ProposalResponse;
+    let parsedResponse: ProposalResponse | AIErrorResponse;
+    let proposalResponse: ProposalResponse;
+    
     try {
       parsedResponse = JSON.parse(aiResponseText);
+      
+      // Check if AI returned an error response
+      if ('error' in parsedResponse && parsedResponse.error === true) {
+        // Handle different error types
+        if (parsedResponse.code === "OUT_OF_SCOPE") {
+          return res
+            .status(400)
+            .json(
+              newErrorResponse(
+                "Out of Scope",
+                parsedResponse.message || "This type of work is not supported. Please provide a web development related project."
+              )
+            );
+        } else if (parsedResponse.code === "INVALID_INPUT") {
+          return res
+            .status(400)
+            .json(
+              newErrorResponse(
+                "Invalid Input",
+                parsedResponse.message || "The provided information is not valid. Please check your input and try again."
+              )
+            );
+        } else if (parsedResponse.code === "CONTENT_TOO_LONG") {
+          return res
+            .status(400)
+            .json(
+              newErrorResponse(
+                "Content Too Long",
+                parsedResponse.message || "The job description is too long. Please provide a shorter summary."
+              )
+            );
+        } else {
+          return res
+            .status(400)
+            .json(
+              newErrorResponse(
+                "AI Error",
+                parsedResponse.message || "The AI service encountered an error. Please try again."
+              )
+            );
+        }
+      }
+      
+      // At this point, parsedResponse should be a ProposalResponse
+      proposalResponse = parsedResponse as ProposalResponse;
+      
     } catch (err) {
       console.error(
         "[generateProposal] Unexpected JSON parse failure after validation:",
@@ -390,22 +437,48 @@ export async function generateProposal(req: Request, res: Response) {
         );
     }
 
+    // 6.1. Validate parsed response structure
+    if (!proposalResponse) {
+      console.error("[generateProposal] Parsed response is null/undefined");
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "Processing Error",
+            "The AI response was empty. Please try again or contact support."
+          )
+        );
+    }
+
+    // Ensure keyPoints is an array
+    if (!Array.isArray(proposalResponse.keyPoints)) {
+      proposalResponse.keyPoints = [];
+    }
+
+    // Ensure all required fields exist
+    const requiredFields = ['hook', 'solution', 'availability', 'support', 'closing'];
+    for (const field of requiredFields) {
+      if (!proposalResponse[field as keyof ProposalResponse]) {
+        proposalResponse[field as keyof ProposalResponse] = `[${field} not provided]` as any;
+      }
+    }
+
     // 6.5. Combine components into MDX
-    const mdxContent = `${parsedResponse.hook}
+    const mdxContent = `${proposalResponse.hook}
 
-${parsedResponse.solution}
+${proposalResponse.solution}
 
-${parsedResponse.keyPoints.map((point) => `• ${point}`).join("\n")}
+${proposalResponse.keyPoints.map((point: string) => `• ${point}`).join("\n")}
 
-${parsedResponse.portfolioLink ? `Portfolio: ${parsedResponse.portfolioLink}` : ""}
+${proposalResponse.portfolioLink ? `Portfolio: ${proposalResponse.portfolioLink}` : ""}
 
-${parsedResponse.availability}
+${proposalResponse.availability}
 
-${parsedResponse.support}
+${proposalResponse.support}
 
-${parsedResponse.closing}`;
+${proposalResponse.closing}`;
 
-    parsedResponse.mdx = mdxContent.trim();
+    proposalResponse.mdx = mdxContent.trim();
 
     // 7. Update quota after success
     try {
@@ -422,7 +495,7 @@ ${parsedResponse.closing}`;
         newSuccessResponse(
           "Proposal Generated",
           "AI proposal generated successfully",
-          parsedResponse
+          proposalResponse
         )
       );
   } catch (err) {
