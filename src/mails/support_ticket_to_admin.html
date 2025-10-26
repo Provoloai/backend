@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>New Support Ticket - {{name}}</title>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f5f5;
+    "
+  >
+    <table
+      role="presentation"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      width="100%"
+      style="background-color: #f5f5f5"
+    >
+      <tr>
+        <td style="padding: 40px 20px">
+          <table
+            role="presentation"
+            cellspacing="0"
+            cellpadding="0"
+            border="0"
+            width="100%"
+            style="
+              max-width: 600px;
+              margin: 0 auto;
+              background-color: #ffffff;
+              border-radius: 8px;
+              overflow: hidden;
+            "
+          >
+            <!-- Alert Header -->
+            <tr>
+              <td
+                style="
+                  padding: 20px 40px;
+                  background-color: #fef3c7;
+                  border-bottom: 2px solid #f59e0b;
+                "
+              >
+                <p
+                  style="
+                    margin: 0;
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #92400e;
+                    text-align: center;
+                  "
+                >
+                  🚨 New Support Ticket Received
+                </p>
+              </td>
+            </tr>
+
+            <!-- Main Content -->
+            <tr>
+              <td style="padding: 40px 40px 20px 40px">
+                <h1
+                  style="
+                    margin: 0 0 20px 0;
+                    font-size: 28px;
+                    font-weight: 700;
+                    color: #1e3a5f;
+                    line-height: 1.2;
+                  "
+                >
+                  New Support Request from {{name}}
+                </h1>
+              </td>
+            </tr>
+
+            <!-- User Information -->
+            <tr>
+              <td style="padding: 0 40px 20px 40px">
+                <table
+                  role="presentation"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                  width="100%"
+                  style="border: 1px solid #e5e7eb; border-radius: 4px;"
+                >
+                  <tr>
+                    <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
+                      <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">
+                        Name:
+                      </p>
+                      <p style="margin: 4px 0 0 0; font-size: 14px; color: #6b7280;">
+                        {{name}}
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
+                      <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">
+                        Email:
+                      </p>
+                      <p style="margin: 4px 0 0 0; font-size: 14px; color: #6b7280;">
+                        {{email}}
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
+                      <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">
+                        Subject:
+                      </p>
+                      <p style="margin: 4px 0 0 0; font-size: 14px; color: #6b7280;">
+                        {{subject}}
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 15px;">
+                      <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">
+                        Message:
+                      </p>
+                      <p style="margin: 4px 0 0 0; font-size: 14px; color: #6b7280; white-space: pre-wrap;">
+                        {{message}}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Action Button -->
+            <tr>
+              <td style="padding: 0 40px 40px 40px; text-align: center;">
+                <a
+                  href="mailto:{{email}}?subject=Re: {{subject}}"
+                  style="
+                    display: inline-block;
+                    padding: 12px 32px;
+                    background-color: #2563eb;
+                    color: #ffffff;
+                    text-decoration: none;
+                    border-radius: 6px;
+                    font-size: 16px;
+                    font-weight: 600;
+                  "
+                >
+                  Reply to User
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+
