@@ -43,42 +43,15 @@ interface SupportEmailData {
   attachments?: FileAttachment[];
 }
 
-// Validate email environment variables
-const validateEmailConfig = (): { valid: boolean; error?: string } => {
-  const emailUser = process.env.EMAIL_USER;
-  const emailPass = process.env.EMAIL_PASS;
-
-  if (!emailUser || !emailPass) {
-    return {
-      valid: false,
-      error: `Missing email credentials. Please set EMAIL_USER and EMAIL_PASS environment variables.
-      
-For Gmail SMTP, you need:
-1. Enable 2-Step Verification in your Google Account
-2. Create an App Password at: https://myaccount.google.com/apppasswords
-3. Set environment variables:
-   EMAIL_USER=your-email@gmail.com
-   EMAIL_PASS=your-16-digit-app-password`,
-    };
-  }
-
-  return { valid: true };
-};
-
 // Create transporter instance
 const createTransporter = (): nodemailer.Transporter => {
-  const configCheck = validateEmailConfig();
-  if (!configCheck.valid) {
-    throw new Error(configCheck.error);
-  }
-
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: 465,
     secure: true,
     auth: {
-        user: process.env.EMAIL_USER!,
-        pass: process.env.EMAIL_PASS!,
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
     },
   } as TransportOptions);
 };
@@ -119,15 +92,9 @@ const sendMail = async (
   mailOptions: MailOptions
 ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
   try {
-    // Validate config before attempting to send
-    const configCheck = validateEmailConfig();
-    if (!configCheck.valid) {
-      throw new Error(configCheck.error);
-    }
-
     const transporter = createTransporter();
     const mailData: SendMailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER!,
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: mailOptions.to,
       subject: mailOptions.subject,
       html: mailOptions.html,
@@ -140,31 +107,10 @@ const sendMail = async (
     console.log(`Email sent successfully: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    let errorMessage = "Unknown error";
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      
-      // Provide helpful guidance for common errors
-      if (error.message.includes("authentication failed") || errorMessage.includes("Invalid login")) {
-        errorMessage += `
-        
-Troubleshooting Gmail SMTP authentication:
-1. Make sure 2-Step Verification is enabled on your Google Account
-2. Create an App Password at: https://myaccount.google.com/apppasswords
-3. Use the 16-character App Password (not your regular Gmail password) in EMAIL_PASS
-4. Verify EMAIL_USER is set to your Gmail address (e.g., youremail@gmail.com)
-5. If using a different email provider, check their SMTP requirements
-        `.trim();
-      } else if (error.message.includes("Missing")) {
-        errorMessage += `\n\nCheck your .env file and ensure EMAIL_USER and EMAIL_PASS are set correctly.`;
-      }
-    }
-    
     console.error("Error sending email:", error);
     return {
       success: false,
-      error: errorMessage,
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 };
@@ -252,12 +198,6 @@ export const sendSupportEmail = async (
   data: SupportEmailData
 ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
   try {
-    // Validate config before attempting to send
-    const configCheck = validateEmailConfig();
-    if (!configCheck.valid) {
-      throw new Error(configCheck.error);
-    }
-
     const adminTemplate = loadEmailTemplate("support_ticket_to_admin");
 
     const adminVariables = {
