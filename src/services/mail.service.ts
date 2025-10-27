@@ -164,9 +164,9 @@ export const sendPremiumWelcomeEmail = async (
     // Send the email
     return await sendMail({
       to: email,
-      subject: "🎉 Welcome to Provolo Pro! Your premium journey starts now",
+      subject: "🎉 Welcome to Provolo Plus! Your premium journey starts now",
       html: htmlContent,
-      text: `Welcome to Provolo Pro! You now have access to all our premium features and unlimited possibilities.`,
+      text: `Welcome to Provolo Plus! You now have access to all our premium features and unlimited possibilities.`,
     });
   } catch (error) {
     console.error("Error sending premium welcome email:", error);

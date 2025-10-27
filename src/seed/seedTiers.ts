@@ -29,7 +29,7 @@ const tiers: Tier[] = [
         maxQuota: 0,
       },
       {
-        name: "Newsletters",
+        name: "Newsletters & Provolo Notes",
         description: "Newsletters.",
         slug: "newsletters",
         limited: false,
@@ -41,8 +41,8 @@ const tiers: Tier[] = [
     updatedAt: new Date(),
   },
   {
-    name: "Pro",
-    slug: "pro",
+    name: "Plus",
+    slug: "plus",
     description: "For freelancers actively applying for jobs and serious about getting clients.",
     recurringInterval: "monthly",
     price: 399,
@@ -65,7 +65,7 @@ const tiers: Tier[] = [
         maxQuota: -1,
       },
       {
-        name: "AI Proposals",
+        name: "Access to the most capable AI-Powered Proposals Generator",
         description: "Unlimited AI Proposals per month.",
         slug: "ai_proposals",
         limited: false,
@@ -73,7 +73,7 @@ const tiers: Tier[] = [
         maxQuota: -1,
       },
       {
-        name: "Comunity Access",
+        name: "Provolo Learn Early Community Access",
         description: "Community Access.",
         slug: "comunity_access",
         limited: false,
@@ -81,9 +81,17 @@ const tiers: Tier[] = [
         maxQuota: -1,
       },
       {
-        name: "Newsletters",
+        name: "Newsletters & Provolo Notes",
         description: "Newsletters.",
         slug: "newsletters",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Freelancer Growth Tools",
+        description: "Access to the Freelancer Growth Tools.",
+        slug: "freelancer_growth_tools",
         limited: false,
         recurringInterval: "",
         maxQuota: -1,

@@ -7,7 +7,8 @@ export type FeatureSlug =
   | "resume_generator"
   | "advanced_ai_insights"
   | "comunity_access"
-  | "newsletters";
+  | "newsletters"
+  | "freelancer_growth_tools";
 
 export interface Feature {
   name: string;
