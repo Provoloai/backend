@@ -1,3 +1,4 @@
+import "dotenv/config";
 import nodemailer from "nodemailer";
 import type { SendMailOptions, TransportOptions } from "nodemailer";
 
@@ -15,7 +16,6 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import "dotenv/config";
 import type { FileAttachment } from "../utils/fileValidation.utils.ts";
 
 // ES modules equivalent of __dirname
@@ -45,13 +45,6 @@ interface SupportEmailData {
 
 // Create transporter instance
 const createTransporter = (): nodemailer.Transporter => {
-  // Debug: Log environment variables (masking password)
-  console.log("[EMAIL DEBUG] Environment variables:");
-  console.log("EMAIL_HOST:", process.env.EMAIL_HOST || "smtp.gmail.com (default)");
-  console.log("EMAIL_USER:", process.env.EMAIL_USER || "NOT SET");
-  console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "***SET***" : "NOT SET");
-  console.log("EMAIL_FROM:", process.env.EMAIL_FROM || "NOT SET");
-  
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: 465,
