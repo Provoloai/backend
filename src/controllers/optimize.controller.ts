@@ -6,11 +6,19 @@ import {
   linkedinOptimizerSystemInstruction,
   proposalPrompt,
   proposalSystemInstruction,
+  storeProposalHistory,
+  getUserProposalHistory,
+  getProposalById,
 } from "../utils/prompt.utils.ts";
 import { updateUserQuota, checkUserQuota } from "../utils/quota.utils.ts";
 import { callGemini } from "../utils/geminiClient.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
-import type { ProposalReq, ProposalResponse, AIErrorResponse } from "../types/proposal.types.ts";
+import type {
+  ProposalReq,
+  ProposalResponse,
+  AIErrorResponse,
+  ProposalHistoryReq,
+} from "../types/proposal.types.ts";
 
 interface PromptReq {
   full_name: string;
@@ -23,7 +31,9 @@ export async function optimizeProfile(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Check quota
@@ -43,7 +53,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         );
     }
     if (!quotaResult.allowed) {
-      const limitText = quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
+      const limitText =
+        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
       return res
         .status(429)
         .json(
@@ -66,10 +77,19 @@ export async function optimizeProfile(req: Request, res: Response) {
           )
         );
     }
-    if (full_name.length > 100 || professional_title.length > 200 || profile.length > 5000) {
+    if (
+      full_name.length > 100 ||
+      professional_title.length > 200 ||
+      profile.length > 5000
+    ) {
       return res
         .status(400)
-        .json(newErrorResponse("Validation Error", "Input fields exceed allowed length."));
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
     }
 
     // 4. Sanitize input (simple trim)
@@ -155,7 +175,9 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Check quota
@@ -175,7 +197,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         );
     }
     if (!quotaResult.allowed) {
-      const limitText = quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
+      const limitText =
+        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
       return res
         .status(429)
         .json(
@@ -198,10 +221,19 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
           )
         );
     }
-    if (full_name.length > 100 || professional_title.length > 200 || profile.length > 5000) {
+    if (
+      full_name.length > 100 ||
+      professional_title.length > 200 ||
+      profile.length > 5000
+    ) {
       return res
         .status(400)
-        .json(newErrorResponse("Validation Error", "Input fields exceed allowed length."));
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
     }
 
     // 4. Sanitize input (simple trim)
@@ -215,7 +247,10 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
     // 5. Call AI model (replace with your actual AI call)
     let aiResponseText = "";
     try {
-      aiResponseText = await callGemini(content, linkedinOptimizerSystemInstruction());
+      aiResponseText = await callGemini(
+        content,
+        linkedinOptimizerSystemInstruction()
+      );
     } catch (err: any) {
       console.error("[optimizeLinkedIn] AI service call failed:", err);
       return res
@@ -286,7 +321,9 @@ export async function generateProposal(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Check quota
@@ -305,7 +342,8 @@ export async function generateProposal(req: Request, res: Response) {
         );
     }
     if (!quotaResult.allowed) {
-      const limitText = quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
+      const limitText =
+        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
       return res
         .status(429)
         .json(
@@ -317,21 +355,31 @@ export async function generateProposal(req: Request, res: Response) {
     }
 
     // 3. Validate input
-    const { client_name, proposal_tone, job_summary } = req.body as ProposalReq;
-    if (!client_name || !proposal_tone || !job_summary) {
+    const { client_name, job_title, proposal_tone, job_summary } =
+      req.body as ProposalReq;
+    if (!client_name || !job_title || !proposal_tone || !job_summary) {
       return res
         .status(400)
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Missing required fields: client_name, proposal_tone, job_summary"
+            "Missing required fields: client_name, job_title, proposal_tone, job_summary"
           )
         );
     }
-    if (client_name.length > 100 || job_summary.length > 2000) {
+    if (
+      client_name.length > 100 ||
+      job_title.length > 200 ||
+      job_summary.length > 2000
+    ) {
       return res
         .status(400)
-        .json(newErrorResponse("Validation Error", "Input fields exceed allowed length."));
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
     }
     const validTones = ["professional", "conversational", "confident", "calm"];
     if (!validTones.includes(proposal_tone)) {
@@ -347,9 +395,10 @@ export async function generateProposal(req: Request, res: Response) {
 
     // 4. Sanitize input (simple trim)
     const sanitizedClientName = client_name.trim();
+    const sanitizedJobTitle = job_title.trim();
     const sanitizedJobSummary = job_summary.trim();
 
-    const inputContent = `Client Name: ${sanitizedClientName}\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
+    const inputContent = `Client Name: ${sanitizedClientName}\nJob Title: ${sanitizedJobTitle}\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
     const content = proposalPrompt(inputContent);
 
     // 5. Call AI model
@@ -371,12 +420,12 @@ export async function generateProposal(req: Request, res: Response) {
     // 6. Parse AI response
     let parsedResponse: ProposalResponse | AIErrorResponse;
     let proposalResponse: ProposalResponse;
-    
+
     try {
       parsedResponse = JSON.parse(aiResponseText);
-      
+
       // Check if AI returned an error response
-      if ('error' in parsedResponse && parsedResponse.error === true) {
+      if ("error" in parsedResponse && parsedResponse.error === true) {
         // Handle different error types
         if (parsedResponse.code === "OUT_OF_SCOPE") {
           return res
@@ -384,7 +433,8 @@ export async function generateProposal(req: Request, res: Response) {
             .json(
               newErrorResponse(
                 "Out of Scope",
-                parsedResponse.message || "This type of work is not supported. Please provide a web development related project."
+                parsedResponse.message ||
+                  "This type of work is not supported. Please provide a web development related project."
               )
             );
         } else if (parsedResponse.code === "INVALID_INPUT") {
@@ -393,7 +443,8 @@ export async function generateProposal(req: Request, res: Response) {
             .json(
               newErrorResponse(
                 "Invalid Input",
-                parsedResponse.message || "The provided information is not valid. Please check your input and try again."
+                parsedResponse.message ||
+                  "The provided information is not valid. Please check your input and try again."
               )
             );
         } else if (parsedResponse.code === "CONTENT_TOO_LONG") {
@@ -402,7 +453,8 @@ export async function generateProposal(req: Request, res: Response) {
             .json(
               newErrorResponse(
                 "Content Too Long",
-                parsedResponse.message || "The job description is too long. Please provide a shorter summary."
+                parsedResponse.message ||
+                  "The job description is too long. Please provide a shorter summary."
               )
             );
         } else {
@@ -411,15 +463,15 @@ export async function generateProposal(req: Request, res: Response) {
             .json(
               newErrorResponse(
                 "AI Error",
-                parsedResponse.message || "The AI service encountered an error. Please try again."
+                parsedResponse.message ||
+                  "The AI service encountered an error. Please try again."
               )
             );
         }
       }
-      
+
       // At this point, parsedResponse should be a ProposalResponse
       proposalResponse = parsedResponse as ProposalResponse;
-      
     } catch (err) {
       console.error(
         "[generateProposal] Unexpected JSON parse failure after validation:",
@@ -456,10 +508,17 @@ export async function generateProposal(req: Request, res: Response) {
     }
 
     // Ensure all required fields exist
-    const requiredFields = ['hook', 'solution', 'availability', 'support', 'closing'];
+    const requiredFields = [
+      "hook",
+      "solution",
+      "availability",
+      "support",
+      "closing",
+    ];
     for (const field of requiredFields) {
       if (!proposalResponse[field as keyof ProposalResponse]) {
-        proposalResponse[field as keyof ProposalResponse] = `[${field} not provided]` as any;
+        proposalResponse[field as keyof ProposalResponse] =
+          `[${field} not provided]` as any;
       }
     }
 
@@ -470,7 +529,11 @@ ${proposalResponse.solution}
 
 ${proposalResponse.keyPoints.map((point: string) => `• ${point}`).join("\n")}
 
-${proposalResponse.portfolioLink ? `Portfolio: ${proposalResponse.portfolioLink}` : ""}
+${
+  proposalResponse.portfolioLink
+    ? `Portfolio: ${proposalResponse.portfolioLink}`
+    : ""
+}
 
 ${proposalResponse.availability}
 
@@ -480,7 +543,27 @@ ${proposalResponse.closing}`;
 
     proposalResponse.mdx = mdxContent.trim();
 
-    // 7. Update quota after success
+    // 7. Store proposal history
+    try {
+      await storeProposalHistory(
+        userId,
+        {
+          client_name: sanitizedClientName,
+          job_title: sanitizedJobTitle,
+          proposal_tone: proposal_tone,
+          job_summary: sanitizedJobSummary,
+        },
+        proposalResponse
+      );
+    } catch (err) {
+      console.warn(
+        "Warning: Failed to store proposal history for user",
+        userId,
+        err
+      );
+    }
+
+    // 8. Update quota after success
     try {
       await updateUserQuota(userId, "ai_proposals");
     } catch (err) {
@@ -488,7 +571,7 @@ ${proposalResponse.closing}`;
       console.warn("Warning: Failed to update quota for user", userId, err);
     }
 
-    // 8. Return success
+    // 9. Return success
     return res
       .status(200)
       .json(
@@ -507,6 +590,118 @@ ${proposalResponse.closing}`;
         newErrorResponse(
           "Internal Server Error",
           "An error occurred. Please try again or contact support."
+        )
+      );
+  }
+}
+
+// Get user's AI proposal history
+export async function getProposalHistory(req: Request, res: Response) {
+  try {
+    // 1. Get user ID from auth middleware
+    const userId = req.userID as string;
+    if (!userId) {
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
+    }
+
+    // 2. Parse query parameters
+    const { page = 1, limit = 10, search } = req.query as ProposalHistoryReq;
+    const pageNum = parseInt(page.toString(), 10);
+    const limitNum = parseInt(limit.toString(), 10);
+
+    // 3. Validate pagination parameters
+    if (pageNum < 1 || limitNum < 1 || limitNum > 50) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Page must be >= 1, limit must be between 1 and 50"
+          )
+        );
+    }
+
+    // 4. Get proposal history with optional search
+    const result = await getUserProposalHistory(userId, pageNum, limitNum, search);
+
+    // 5. Return success
+    return res.status(200).json(
+      newSuccessResponse(
+        "Proposal History Retrieved",
+        "AI proposal history retrieved successfully",
+        {
+          proposals: result.proposals,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total: result.total,
+            hasMore: result.hasMore,
+          },
+        }
+      )
+    );
+  } catch (err) {
+    console.error("[getProposalHistory] Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "An error occurred while retrieving proposal history. Please try again or contact support."
+        )
+      );
+  }
+}
+
+// Get a specific proposal by ID
+export async function getProposalByIdController(req: Request, res: Response) {
+  try {
+    // 1. Get user ID from auth middleware
+    const userId = req.userID as string;
+    if (!userId) {
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
+    }
+
+    // 2. Get proposal ID from params
+    const { proposalId } = req.params;
+    if (!proposalId) {
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Proposal ID is required"));
+    }
+
+    // 3. Get proposal by ID
+    const proposal = await getProposalById(userId, proposalId);
+    if (!proposal) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse("Not Found", "Proposal not found or access denied")
+        );
+    }
+
+    // 4. Return success
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Proposal Retrieved",
+          "AI proposal retrieved successfully",
+          proposal
+        )
+      );
+  } catch (err) {
+    console.error("[getProposalByIdController] Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "An error occurred while retrieving the proposal. Please try again or contact support."
         )
       );
   }
