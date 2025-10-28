@@ -14,6 +14,9 @@ export interface ProposalResponse {
   support: string;
   closing: string;
   mdx: string;
+  proposalId?: string; // Added for generation response
+  version?: number; // Version number for tracking revisions
+  versionId?: string; // Unique ID for this specific version
 }
 
 export interface AIErrorResponse {
@@ -21,6 +24,13 @@ export interface AIErrorResponse {
   message: string;
   code: "OUT_OF_SCOPE" | "INVALID_INPUT" | "CONTENT_TOO_LONG" | "GENERAL_ERROR";
 }
+
+export type RefinementAction = 
+  | "expand_text" 
+  | "trim_text" 
+  | "simplify_text" 
+  | "improve_flow"
+  | "change_tone";
 
 export interface ProposalHistory {
   id: string;
@@ -32,6 +42,18 @@ export interface ProposalHistory {
   proposalResponse: ProposalResponse;
   createdAt: Date;
   updatedAt: Date;
+  refinementCount: number;
+  latestRefinementId?: string;
+  allRefinementIds?: string[]; // Track all refinements
+  refinements?: RefinementHistory[]; // Full refinement details for detailed views
+  versions?: Array<{
+    versionId: string;
+    version: number;
+    refinementLabel?: string;
+    refinementType?: RefinementAction;
+    proposal: ProposalResponse;
+    createdAt: Date;
+  }>; // All versions including refinements
 }
 
 export interface ProposalHistoryReq {
@@ -39,3 +61,41 @@ export interface ProposalHistoryReq {
   limit?: number;
   search?: string;
 }
+
+export interface RefineProposalReq {
+  proposalId: string;
+  refinementType: RefinementAction;
+  newTone?: "professional" | "conversational" | "confident" | "calm";
+}
+
+export interface RefinementHistory {
+  id: string;
+  proposalId: string;
+  userId: string;
+  refinementType: RefinementAction;
+  refinementLabel: string; // Human-readable label for the refinement
+  originalProposal: ProposalResponse;
+  refinedProposal: ProposalResponse;
+  createdAt: Date;
+  order: number;
+  version: number; // Version number (0 = original, 1, 2, 3, etc.)
+}
+
+export interface ProposalVersion {
+  versionId: string;
+  proposalId: string;
+  version: number;
+  proposal: ProposalResponse;
+  refinementType?: RefinementAction;
+  refinementLabel?: string;
+  createdAt: Date;
+}
+
+// Helper constant for refinement labels
+export const REFINEMENT_LABELS: Record<RefinementAction, string> = {
+  expand_text: "Expanded Text",
+  trim_text: "Trimmed Text",
+  simplify_text: "Simplified Text",
+  improve_flow: "Improved Flow",
+  change_tone: "Changed Tone",
+};

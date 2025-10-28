@@ -2,7 +2,8 @@ import { getFirestore } from "firebase-admin/firestore";
 import type { Tier } from "../types/tiers.ts";
 import type { PromptLimitResult, UserPromptLimit } from "../types/prompt.types.ts";
 import type { QuotaHistory } from "../types/quotas.ts";
-import type { ProposalHistory, ProposalResponse, ProposalReq } from "../types/proposal.types.ts";
+import type { ProposalHistory, ProposalResponse, ProposalReq, RefinementAction, RefinementHistory } from "../types/proposal.types.ts";
+import { REFINEMENT_LABELS } from "../types/proposal.types.ts";
 import { closeFirebaseApp, getFirebaseApp } from "./getFirebaseApp.ts";
 
 // Check optimizer quota for the user's current tier and usage
@@ -288,15 +289,27 @@ export async function storeProposalHistory(
   const db = getFirestore(app);
   try {
     const now = new Date();
+    const proposalId = crypto.randomUUID();
+    
+    // Add version info to proposal response
+    const proposalWithVersion = {
+      ...proposalResponse,
+      version: 0,
+      versionId: proposalId,
+      proposalId
+    };
+    
     const proposalHistory: Omit<ProposalHistory, "id"> = {
       userId,
       clientName: proposalReq.client_name,
       jobTitle: proposalReq.job_title,
       proposalTone: proposalReq.proposal_tone,
       jobSummary: proposalReq.job_summary,
-      proposalResponse,
+      proposalResponse: proposalWithVersion,
       createdAt: now,
       updatedAt: now,
+      refinementCount: 0,
+      allRefinementIds: [],
     };
 
     const docRef = await db.collection("proposal_history").add(proposalHistory);
@@ -336,6 +349,9 @@ export async function getUserProposalHistory(
         proposalResponse: data.proposalResponse,
         createdAt: data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt),
         updatedAt: data.updatedAt instanceof Date ? data.updatedAt : new Date(data.updatedAt),
+        refinementCount: data.refinementCount || 0,
+        latestRefinementId: data.latestRefinementId,
+        allRefinementIds: data.allRefinementIds || [],
       };
       
       // Apply search filter if search term is provided
@@ -391,6 +407,76 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       return null;
     }
 
+    // Get all refinements if they exist
+    let refinements: RefinementHistory[] = [];
+    let versions: Array<{
+      versionId: string;
+      version: number;
+      refinementLabel?: string;
+      refinementType?: RefinementAction;
+      proposal: ProposalResponse;
+      createdAt: Date;
+    }> = [];
+
+    if (data.allRefinementIds && data.allRefinementIds.length > 0) {
+      // Fetch all refinement documents
+      const refinementDocs = await Promise.all(
+        data.allRefinementIds.map((id: string) => db.collection("refinement_history").doc(id).get())
+      );
+
+      refinements = refinementDocs
+        .filter(doc => doc.exists)
+        .map(doc => {
+          const refinement = doc.data()!;
+          return {
+            id: doc.id,
+            proposalId: refinement.proposalId,
+            userId: refinement.userId,
+            refinementType: refinement.refinementType,
+            refinementLabel: refinement.refinementLabel,
+            originalProposal: refinement.originalProposal,
+            refinedProposal: refinement.refinedProposal,
+            createdAt: refinement.createdAt instanceof Date ? refinement.createdAt : new Date(refinement.createdAt),
+            order: refinement.order,
+            version: refinement.version,
+          } as RefinementHistory;
+        });
+
+      // Create versions array
+      // Add original version (version 0)
+      versions.push({
+        versionId: doc.id,
+        version: 0,
+        proposal: {
+          ...data.proposalResponse,
+          version: 0,
+          versionId: doc.id,
+          proposalId: doc.id,
+        },
+        createdAt: data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt),
+      });
+
+      // Add refinement versions
+      refinements.forEach(refinement => {
+        versions.push({
+          versionId: refinement.id,
+          version: refinement.version,
+          refinementLabel: refinement.refinementLabel,
+          refinementType: refinement.refinementType,
+          proposal: {
+            ...refinement.refinedProposal,
+            version: refinement.version,
+            versionId: refinement.id,
+            proposalId,
+          },
+          createdAt: refinement.createdAt,
+        });
+      });
+
+      // Sort versions by version number
+      versions.sort((a, b) => a.version - b.version);
+    }
+
     return {
       id: doc.id,
       userId: data.userId,
@@ -401,7 +487,232 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       proposalResponse: data.proposalResponse,
       createdAt: data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt),
       updatedAt: data.updatedAt instanceof Date ? data.updatedAt : new Date(data.updatedAt),
+      refinementCount: data.refinementCount || 0,
+      latestRefinementId: data.latestRefinementId,
+      allRefinementIds: data.allRefinementIds || [],
+      ...(refinements.length > 0 ? { refinements } : {}),
+      ...(versions.length > 1 ? { versions } : {}),
     };
+  } finally {
+    closeFirebaseApp();
+  }
+}
+
+// Refinement prompt functions
+export function refineProposalPrompt(
+  currentProposal: ProposalResponse,
+  refinementType: RefinementAction,
+  jobTitle: string,
+  clientName: string,
+  tone?: string
+): string {
+  const toneInstruction = tone ? `Maintain a ${tone} tone throughout.` : '';
+  
+  const refinementInstructions = {
+    expand_text: `Expand the proposal by adding more details, examples, and context. Make it more comprehensive while maintaining its effectiveness.`,
+    trim_text: `Make the proposal more concise by removing unnecessary words and redundancy. Keep all key information but reduce wordiness.`,
+    simplify_text: `Simplify complex sentences and break down technical jargon. Make it easier to understand while maintaining professionalism.`,
+    improve_flow: `Reorganize the proposal to improve the logical flow and readability. Ensure smooth transitions between sections.`,
+    change_tone: `Adjust the tone to be ${tone}. Keep all the same information but adjust the language, formality, and voice accordingly.`
+  };
+
+  return `You are refining an existing Upwork proposal. Your task is to ${refinementInstructions[refinementType]} ${toneInstruction}
+
+IMPORTANT: You MUST return your response as a valid JSON object with the SAME schema as the original:
+
+{
+  "hook": "string - 1-2 sentences that grab attention",
+  "solution": "string - explanation of how you'll solve their problem",
+  "keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
+  "portfolioLink": "string - portfolio URL if relevant",
+  "availability": "string - availability statement",
+  "support": "string - post-delivery support mention",
+  "closing": "string - call-to-action to chat or move forward"
+}
+
+Current Proposal:
+${JSON.stringify(currentProposal, null, 2)}
+
+Job Title: ${jobTitle}
+Client Name: ${clientName}
+
+Instructions: ${refinementInstructions[refinementType]} ${toneInstruction}
+
+CRITICAL: Your response must be ONLY a valid JSON object. Maintain all the core information but apply the requested refinement.`;
+}
+
+export function refineProposalSystemInstruction(): string {
+  return `You are a specialized AI editor for refining Upwork proposals. Your role is to improve existing proposals based on specific refinement requests while maintaining their core content and effectiveness.
+
+STRICT RULES:
+1. Return proposals in the EXACT same JSON format as provided
+2. Maintain all essential information and key points
+3. Only apply the specific refinement requested
+4. Keep the proposal professional and compelling
+5. Do not change the structure or remove important details unless specifically asked
+6. NEVER include HTML, script tags, or any markup
+
+Always return valid JSON in the specified format.`;
+}
+
+// Database functions for refinement
+export async function getLatestProposalVersion(
+  proposalId: string,
+  userId: string
+): Promise<{ proposal: ProposalResponse; refinementOrder: number }> {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  
+  try {
+    // Get the proposal history record
+    const proposalDoc = await db.collection("proposal_history").doc(proposalId).get();
+    if (!proposalDoc.exists) {
+      throw new Error("Proposal not found");
+    }
+    
+    const proposalData = proposalDoc.data()!;
+    if (proposalData.userId !== userId) {
+      throw new Error("Unauthorized access");
+    }
+    
+    // If there are refinements, get the latest one
+    if (proposalData.latestRefinementId) {
+      const refinementDoc = await db.collection("refinement_history").doc(proposalData.latestRefinementId).get();
+      if (refinementDoc.exists) {
+        const refinement = refinementDoc.data()! as RefinementHistory;
+        return {
+          proposal: refinement.refinedProposal,
+          refinementOrder: refinement.order
+        };
+      }
+    }
+    
+    // Return original proposal
+    return {
+      proposal: proposalData.proposalResponse,
+      refinementOrder: 0
+    };
+  } finally {
+    closeFirebaseApp();
+  }
+}
+
+export async function storeRefinement(
+  proposalId: string,
+  userId: string,
+  refinementType: RefinementAction,
+  originalProposal: ProposalResponse,
+  refinedProposal: ProposalResponse,
+  currentOrder: number
+): Promise<string> {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  
+  try {
+    const now = new Date();
+    const newOrder = currentOrder + 1;
+    
+    const refinement: Omit<RefinementHistory, "id"> = {
+      proposalId,
+      userId,
+      refinementType,
+      refinementLabel: REFINEMENT_LABELS[refinementType],
+      originalProposal,
+      refinedProposal,
+      createdAt: now,
+      order: newOrder,
+      version: newOrder // Version number matches order
+    };
+    
+    // Store refinement
+    const refinementRef = await db.collection("refinement_history").add(refinement);
+    
+    // Get current allRefinementIds array
+    const proposalDoc = await db.collection("proposal_history").doc(proposalId).get();
+    const proposalData = proposalDoc.data();
+    const allRefinementIds = proposalData?.allRefinementIds || [];
+    
+    // Update proposal history to track latest refinement and add to array
+    await db.collection("proposal_history").doc(proposalId).update({
+      latestRefinementId: refinementRef.id,
+      refinementCount: newOrder,
+      allRefinementIds: [...allRefinementIds, refinementRef.id],
+      updatedAt: now
+    });
+    
+    return refinementRef.id;
+  } finally {
+    closeFirebaseApp();
+  }
+}
+
+// Get all versions of a proposal for version history navigation
+export async function getProposalVersions(
+  proposalId: string,
+  userId: string
+): Promise<Array<{ versionId: string; version: number; refinementLabel?: string; refinementType?: RefinementAction; createdAt: Date; proposal: ProposalResponse }>> {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  
+  try {
+    const versions: Array<{ versionId: string; version: number; refinementLabel?: string; refinementType?: RefinementAction; createdAt: Date; proposal: ProposalResponse }> = [];
+    
+    // Get the original proposal
+    const proposalDoc = await db.collection("proposal_history").doc(proposalId).get();
+    if (!proposalDoc.exists) {
+      throw new Error("Proposal not found");
+    }
+    
+    const proposalData = proposalDoc.data()!;
+    if (proposalData.userId !== userId) {
+      throw new Error("Unauthorized access");
+    }
+    
+    const proposalResponse = proposalData.proposalResponse;
+    
+    // Add version 0 (original)
+    versions.push({
+      versionId: proposalId,
+      version: 0,
+      createdAt: proposalData.createdAt instanceof Date ? proposalData.createdAt : new Date(proposalData.createdAt),
+      proposal: {
+        ...proposalResponse,
+        version: 0,
+        versionId: proposalId,
+        proposalId
+      }
+    });
+    
+    // Get all refinements
+    if (proposalData.allRefinementIds && proposalData.allRefinementIds.length > 0) {
+      const refinementDocs = await Promise.all(
+        proposalData.allRefinementIds.map((id: string) => db.collection("refinement_history").doc(id).get())
+      );
+      
+      refinementDocs.forEach(doc => {
+        if (doc.exists) {
+          const refinement = doc.data()!;
+          versions.push({
+            versionId: doc.id,
+            version: refinement.version,
+            refinementLabel: refinement.refinementLabel,
+            refinementType: refinement.refinementType,
+            createdAt: refinement.createdAt instanceof Date ? refinement.createdAt : new Date(refinement.createdAt),
+            proposal: {
+              ...refinement.refinedProposal,
+              version: refinement.version,
+              versionId: doc.id,
+              proposalId
+            }
+          });
+        }
+      });
+      
+      // Sort by version number
+      versions.sort((a, b) => a.version - b.version);
+    }
+    
+    return versions;
   } finally {
     closeFirebaseApp();
   }

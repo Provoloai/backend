@@ -9,6 +9,11 @@ import {
   storeProposalHistory,
   getUserProposalHistory,
   getProposalById,
+  refineProposalPrompt,
+  refineProposalSystemInstruction,
+  getLatestProposalVersion,
+  storeRefinement,
+  getProposalVersions,
 } from "../utils/prompt.utils.ts";
 import { updateUserQuota, checkUserQuota } from "../utils/quota.utils.ts";
 import { callGemini } from "../utils/geminiClient.ts";
@@ -18,6 +23,8 @@ import type {
   ProposalResponse,
   AIErrorResponse,
   ProposalHistoryReq,
+  RefineProposalReq,
+  RefinementAction,
 } from "../types/proposal.types.ts";
 
 interface PromptReq {
@@ -517,8 +524,7 @@ export async function generateProposal(req: Request, res: Response) {
     ];
     for (const field of requiredFields) {
       if (!proposalResponse[field as keyof ProposalResponse]) {
-        proposalResponse[field as keyof ProposalResponse] =
-          `[${field} not provided]` as any;
+        (proposalResponse as any)[field] = `[${field} not provided]`;
       }
     }
 
@@ -543,9 +549,10 @@ ${proposalResponse.closing}`;
 
     proposalResponse.mdx = mdxContent.trim();
 
-    // 7. Store proposal history
+    // 7. Store proposal history and get the proposal ID
+    let proposalId: string | undefined;
     try {
-      await storeProposalHistory(
+      proposalId = await storeProposalHistory(
         userId,
         {
           client_name: sanitizedClientName,
@@ -555,6 +562,8 @@ ${proposalResponse.closing}`;
         },
         proposalResponse
       );
+      // Add proposal ID to response
+      proposalResponse.proposalId = proposalId;
     } catch (err) {
       console.warn(
         "Warning: Failed to store proposal history for user",
@@ -704,5 +713,142 @@ export async function getProposalByIdController(req: Request, res: Response) {
           "An error occurred while retrieving the proposal. Please try again or contact support."
         )
       );
+  }
+}
+
+export async function refineProposal(req: Request, res: Response) {
+  try {
+    // 1. Auth check
+    const userId = req.userID as string;
+    if (!userId) {
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
+    }
+
+    // 2. Validate input
+    const { proposalId, refinementType, newTone } = req.body as RefineProposalReq;
+    
+    if (!proposalId || !refinementType) {
+      return res.status(400).json(
+        newErrorResponse("Invalid Request", "Missing proposalId or refinementType")
+      );
+    }
+
+    const validRefinementTypes: RefinementAction[] = [
+      "expand_text", "trim_text", "simplify_text", "improve_flow", "change_tone"
+    ];
+    
+    if (!validRefinementTypes.includes(refinementType)) {
+      return res.status(400).json(
+        newErrorResponse("Invalid Request", "Invalid refinement type")
+      );
+    }
+
+    // Change tone requires newTone
+    if (refinementType === "change_tone" && !newTone) {
+      return res.status(400).json(
+        newErrorResponse("Invalid Request", "newTone required for change_tone refinement")
+      );
+    }
+
+    // 3. Get proposal details
+    const proposal = await getProposalById(userId, proposalId);
+    if (!proposal) {
+      return res.status(404).json(
+        newErrorResponse("Not Found", "Proposal not found")
+      );
+    }
+
+    // 4. Get latest version (could be refined already)
+    const { proposal: currentProposal, refinementOrder } = await getLatestProposalVersion(proposalId, userId);
+
+    // 5. Call AI for refinement
+    const prompt = refineProposalPrompt(
+      currentProposal,
+      refinementType,
+      proposal.jobTitle,
+      proposal.clientName,
+      newTone || proposal.proposalTone
+    );
+
+    let aiResponseText = "";
+    try {
+      aiResponseText = await callGemini(prompt, refineProposalSystemInstruction());
+    } catch (err: any) {
+      console.error("[refineProposal] AI call failed:", err);
+      return res.status(500).json(
+        newErrorResponse("AI Service Error", "Failed to refine proposal. Please try again.")
+      );
+    }
+
+    // 6. Parse AI response
+    let refinedProposal: ProposalResponse;
+    try {
+      refinedProposal = JSON.parse(aiResponseText) as ProposalResponse;
+    } catch (err) {
+      console.error("[refineProposal] JSON parse failed:", err);
+      return res.status(500).json(
+        newErrorResponse("Processing Error", "Failed to process refined proposal.")
+      );
+    }
+
+    // 7. Store refinement
+    await storeRefinement(
+      proposalId,
+      userId,
+      refinementType,
+      currentProposal,
+      refinedProposal,
+      refinementOrder
+    );
+
+    // 8. Return success
+    return res.status(200).json(
+      newSuccessResponse(
+        "Proposal Refined",
+        "Proposal refined successfully",
+        refinedProposal
+      )
+    );
+  } catch (err) {
+    console.error("[refineProposal] Error:", err);
+    return res.status(500).json(
+      newErrorResponse("Internal Server Error", "An error occurred while refining the proposal.")
+    );
+  }
+}
+
+// Get all versions of a proposal
+export async function getProposalVersionsController(req: Request, res: Response) {
+  try {
+    const userId = req.userID as string;
+    if (!userId) {
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
+    }
+
+    const { proposalId } = req.params;
+    if (!proposalId) {
+      return res.status(400).json(
+        newErrorResponse("Invalid Request", "Proposal ID is required")
+      );
+    }
+
+    const versions = await getProposalVersions(proposalId, userId);
+
+    return res.status(200).json(
+      newSuccessResponse(
+        "Versions Retrieved",
+        "Proposal versions retrieved successfully",
+        { versions }
+      )
+    );
+  } catch (err) {
+    console.error("[getProposalVersionsController] Error:", err);
+    return res.status(500).json(
+      newErrorResponse("Internal Server Error", "An error occurred while retrieving proposal versions.")
+    );
   }
 }

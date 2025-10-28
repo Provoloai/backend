@@ -7,6 +7,8 @@ import {
   generateProposal,
   getProposalHistory,
   getProposalByIdController,
+  refineProposal,
+  getProposalVersionsController,
 } from "../controllers/optimize.controller.ts";
 
 const aiRouter: ExpressRouter = Router();
@@ -404,7 +406,7 @@ aiRouter.get("/proposal-history", authMiddleware, getProposalHistory);
  *                       description: Job summary used for generation
  *                     proposalResponse:
  *                       type: object
- *                       description: Complete generated proposal content
+ *                       description: Complete generated proposal content (latest version)
  *                       properties:
  *                         hook:
  *                           type: string
@@ -424,6 +426,78 @@ aiRouter.get("/proposal-history", authMiddleware, getProposalHistory);
  *                           type: string
  *                         mdx:
  *                           type: string
+ *                         proposalId:
+ *                           type: string
+ *                         version:
+ *                           type: number
+ *                         versionId:
+ *                           type: string
+ *                     refinementCount:
+ *                       type: number
+ *                       description: Number of times this proposal has been refined
+ *                     latestRefinementId:
+ *                       type: string
+ *                       description: ID of the most recent refinement
+ *                     allRefinementIds:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       description: Array of all refinement IDs
+ *                     refinements:
+ *                       type: array
+ *                       description: Full refinement history with before/after (only included if refinements exist)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           proposalId:
+ *                             type: string
+ *                           userId:
+ *                             type: string
+ *                           refinementType:
+ *                             type: string
+ *                             enum: [expand_text, trim_text, simplify_text, improve_flow, change_tone]
+ *                           refinementLabel:
+ *                             type: string
+ *                             description: Human-readable refinement label
+ *                           originalProposal:
+ *                             type: object
+ *                             description: Proposal before refinement
+ *                           refinedProposal:
+ *                             type: object
+ *                             description: Proposal after refinement
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           order:
+ *                             type: number
+ *                           version:
+ *                             type: number
+ *                     versions:
+ *                       type: array
+ *                       description: All versions including original (only included if refinements exist)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           versionId:
+ *                             type: string
+ *                             description: Unique ID for this version
+ *                           version:
+ *                             type: number
+ *                             description: Version number (0 = original, 1, 2, 3... for refinements)
+ *                           refinementLabel:
+ *                             type: string
+ *                             description: Label for this version (if refinement)
+ *                           refinementType:
+ *                             type: string
+ *                             enum: [expand_text, trim_text, simplify_text, improve_flow, change_tone]
+ *                           proposal:
+ *                             type: object
+ *                             description: Complete proposal for this version
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
  *                     createdAt:
  *                       type: string
  *                       format: date-time
@@ -440,5 +514,79 @@ aiRouter.get("/proposal-history", authMiddleware, getProposalHistory);
  *         description: Internal Server Error - Failed to retrieve proposal
  */
 aiRouter.get("/proposal-history/:proposalId", authMiddleware, getProposalByIdController);
+
+/**
+ * @swagger
+ * /api/v1/ai/refine-proposal:
+ *   post:
+ *     summary: Refine an existing AI proposal
+ *     description: Refines an existing proposal by expanding, trimming, simplifying, improving flow, or changing tone
+ *     tags:
+ *       - AI
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - proposalId
+ *               - refinementType
+ *             properties:
+ *               proposalId:
+ *                 type: string
+ *                 description: ID of the proposal to refine
+ *               refinementType:
+ *                 type: string
+ *                 enum: [expand_text, trim_text, simplify_text, improve_flow, change_tone]
+ *                 description: Type of refinement to apply
+ *               newTone:
+ *                 type: string
+ *                 enum: [professional, conversational, confident, calm]
+ *                 description: New tone (required only for change_tone refinement)
+ *     responses:
+ *       200:
+ *         description: Proposal refined successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Proposal not found
+ *       500:
+ *         description: Internal server error
+ */
+aiRouter.post("/refine-proposal", authMiddleware, refineProposal);
+
+/**
+ * @swagger
+ * /api/v1/ai/proposal-versions/{proposalId}:
+ *   get:
+ *     summary: Get all versions of a proposal
+ *     description: Retrieves all versions (original + refinements) of a specific proposal with version history navigation
+ *     tags:
+ *       - AI
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: proposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Proposal ID
+ *     responses:
+ *       200:
+ *         description: Versions retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Proposal not found
+ *       500:
+ *         description: Internal server error
+ */
+aiRouter.get("/proposal-versions/:proposalId", authMiddleware, getProposalVersionsController);
 
 export default aiRouter;
