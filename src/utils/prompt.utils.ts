@@ -1,10 +1,32 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import type { Tier } from "../types/tiers.ts";
 import type { PromptLimitResult, UserPromptLimit } from "../types/prompt.types.ts";
 import type { QuotaHistory } from "../types/quotas.ts";
 import type { ProposalHistory, ProposalResponse, ProposalReq, RefinementAction, RefinementHistory } from "../types/proposal.types.ts";
 import { REFINEMENT_LABELS } from "../types/proposal.types.ts";
 import { closeFirebaseApp, getFirebaseApp } from "./getFirebaseApp.ts";
+
+// Helper function to convert Firestore timestamp to Date
+function toDate(firestoreTimestamp: any): Date {
+  if (!firestoreTimestamp) {
+    return new Date();
+  }
+  if (firestoreTimestamp instanceof Date) {
+    return firestoreTimestamp;
+  }
+  if (firestoreTimestamp instanceof Timestamp) {
+    return firestoreTimestamp.toDate();
+  }
+  if (typeof firestoreTimestamp === 'string' || typeof firestoreTimestamp === 'number') {
+    return new Date(firestoreTimestamp);
+  }
+  // Fallback for Firestore Timestamp-like objects
+  if (firestoreTimestamp.toDate && typeof firestoreTimestamp.toDate === 'function') {
+    return firestoreTimestamp.toDate();
+  }
+  // Last resort: try to create a Date
+  return new Date(firestoreTimestamp);
+}
 
 // Check optimizer quota for the user's current tier and usage
 export async function checkOptimizerQuotaForUser(userId: string): Promise<PromptLimitResult> {
@@ -347,8 +369,8 @@ export async function getUserProposalHistory(
         proposalTone: data.proposalTone,
         jobSummary: data.jobSummary,
         proposalResponse: data.proposalResponse,
-        createdAt: data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt),
-        updatedAt: data.updatedAt instanceof Date ? data.updatedAt : new Date(data.updatedAt),
+        createdAt: toDate(data.createdAt),
+        updatedAt: toDate(data.updatedAt),
         refinementCount: data.refinementCount || 0,
         latestRefinementId: data.latestRefinementId,
         allRefinementIds: data.allRefinementIds || [],
@@ -436,7 +458,7 @@ export async function getProposalById(userId: string, proposalId: string): Promi
             refinementLabel: refinement.refinementLabel,
             originalProposal: refinement.originalProposal,
             refinedProposal: refinement.refinedProposal,
-            createdAt: refinement.createdAt instanceof Date ? refinement.createdAt : new Date(refinement.createdAt),
+            createdAt: toDate(refinement.createdAt),
             order: refinement.order,
             version: refinement.version,
           } as RefinementHistory;
@@ -453,7 +475,7 @@ export async function getProposalById(userId: string, proposalId: string): Promi
           versionId: doc.id,
           proposalId: doc.id,
         },
-        createdAt: data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt),
+        createdAt: toDate(data.createdAt),
       });
 
       // Add refinement versions
@@ -485,8 +507,8 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       proposalTone: data.proposalTone,
       jobSummary: data.jobSummary,
       proposalResponse: data.proposalResponse,
-      createdAt: data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt),
-      updatedAt: data.updatedAt instanceof Date ? data.updatedAt : new Date(data.updatedAt),
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
       refinementCount: data.refinementCount || 0,
       latestRefinementId: data.latestRefinementId,
       allRefinementIds: data.allRefinementIds || [],
@@ -674,7 +696,7 @@ export async function getProposalVersions(
     versions.push({
       versionId: proposalId,
       version: 0,
-      createdAt: proposalData.createdAt instanceof Date ? proposalData.createdAt : new Date(proposalData.createdAt),
+      createdAt: toDate(proposalData.createdAt),
       proposal: {
         ...proposalResponse,
         version: 0,
@@ -697,7 +719,7 @@ export async function getProposalVersions(
             version: refinement.version,
             refinementLabel: refinement.refinementLabel,
             refinementType: refinement.refinementType,
-            createdAt: refinement.createdAt instanceof Date ? refinement.createdAt : new Date(refinement.createdAt),
+            createdAt: toDate(refinement.createdAt),
             proposal: {
               ...refinement.refinedProposal,
               version: refinement.version,
