@@ -26,6 +26,30 @@ import type {
   RefineProposalReq,
   RefinementAction,
 } from "../types/proposal.types.ts";
+import { getFirestore } from "firebase-admin/firestore";
+import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
+
+// Helper function to get user display name from database if not in token
+async function getUserDisplayName(userId: string, tokenDisplayName?: string): Promise<string | undefined> {
+  if (tokenDisplayName) {
+    return tokenDisplayName;
+  }
+  
+  try {
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+    const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+    
+    if (!userSnap.empty && userSnap.docs[0]) {
+      const userData = userSnap.docs[0].data();
+      return userData.displayName;
+    }
+  } catch (err) {
+    console.error("[getUserDisplayName] Error fetching display name:", err);
+  }
+  
+  return undefined;
+}
 
 interface PromptReq {
   full_name: string;
@@ -400,13 +424,16 @@ export async function generateProposal(req: Request, res: Response) {
         );
     }
 
-    // 4. Sanitize input (simple trim)
+    // 4. Get user display name
+    const displayName = await getUserDisplayName(userId, req.userDisplayName);
+
+    // 5. Sanitize input (simple trim)
     const sanitizedClientName = client_name.trim();
     const sanitizedJobTitle = job_title.trim();
     const sanitizedJobSummary = job_summary.trim();
 
     const inputContent = `Client Name: ${sanitizedClientName}\nJob Title: ${sanitizedJobTitle}\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
-    const content = proposalPrompt(inputContent);
+    const content = proposalPrompt(inputContent, displayName);
 
     // 5. Call AI model
     let aiResponseText = "";
@@ -763,13 +790,17 @@ export async function refineProposal(req: Request, res: Response) {
     // 4. Get latest version (could be refined already)
     const { proposal: currentProposal, refinementOrder } = await getLatestProposalVersion(proposalId, userId);
 
+    // 4a. Get user display name
+    const displayName = await getUserDisplayName(userId, req.userDisplayName);
+
     // 5. Call AI for refinement
     const prompt = refineProposalPrompt(
       currentProposal,
       refinementType,
       proposal.jobTitle,
       proposal.clientName,
-      newTone || proposal.proposalTone
+      newTone || proposal.proposalTone,
+      displayName
     );
 
     let aiResponseText = "";

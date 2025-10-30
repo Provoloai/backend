@@ -98,7 +98,15 @@ export function linkedinOptimizerSystemInstruction(): string {
 }
 
 // Check if user has reached daily prompt limit (does not increment)
-export function proposalPrompt(inputContent: string): string {
+export function proposalPrompt(inputContent: string, displayName?: string): string {
+  const closingInstruction = displayName 
+    ? `- Closing: End by inviting the client to chat or move forward. Insert a blank line before the professional closing (e.g., "Best regards", "Looking forward to working with you", "Thank you for considering my proposal"). Then put the freelancer's name on the next line: ${displayName}`
+    : `- Closing Call-to-Action: End by inviting the client to chat or move forward`;
+
+  const closingSchemaDesc = displayName 
+    ? `string - call-to-action to chat or move forward. Insert a blank line before the professional closing (e.g., "Best regards", "Looking forward to working with you"). Then the freelancer's name on the next line: ${displayName}`
+    : `string - call-to-action to chat or move forward`;
+
   return `You are a professional Upwork freelancer experienced in writing high-converting proposals for any type of service or project. Your task is to write Upwork proposals that follow these rules:
 
 Tone & Style
@@ -115,7 +123,7 @@ Structure
 - Portfolio Link: Include portfolio links when relevant
 - Availability: Emphasize that you're available to start immediately (if true)
 - Post-Delivery Support: Mention ongoing support when relevant
-- Closing Call-to-Action: End by inviting the client to chat or move forward
+${closingInstruction}
 
 Formatting
 - Use short paragraphs (2–3 lines max)
@@ -131,7 +139,7 @@ IMPORTANT: You MUST return your response as a valid JSON object that matches thi
 "portfolioLink": "string - portfolio URL if relevant",
 "availability": "string - availability statement",
 "support": "string - post-delivery support mention",
-"closing": "string - call-to-action to chat or move forward"
+"closing": "${closingSchemaDesc}"
 }
 
 IMPORTANT: Use the job title and job summary to craft a highly relevant and targeted proposal. Reference the specific job title in your hook to show you understand the role.
@@ -166,7 +174,7 @@ You MUST respond with one of these two JSON formats ONLY:
   "portfolioLink": "string - portfolio URL if relevant",
   "availability": "string - availability statement",
   "support": "string - post-delivery support mention",
-  "closing": "string - call-to-action to chat or move forward"
+  "closing": "string - call-to-action to chat or move forward, followed by a professional closing (e.g., 'Best regards', 'Looking forward to working with you') and the freelancer's name if provided"
 }
 
 **ERROR FORMAT** (when request is not authorized or outside scope):
@@ -526,7 +534,8 @@ export function refineProposalPrompt(
   refinementType: RefinementAction,
   jobTitle: string,
   clientName: string,
-  tone?: string
+  tone?: string,
+  displayName?: string
 ): string {
   const toneInstruction = tone ? `Maintain a ${tone} tone throughout.` : '';
   
@@ -537,6 +546,10 @@ export function refineProposalPrompt(
     improve_flow: `Reorganize the proposal to improve the logical flow and readability. Ensure smooth transitions between sections.`,
     change_tone: `Adjust the tone to be ${tone}. Keep all the same information but adjust the language, formality, and voice accordingly.`
   };
+
+  const closingNote = displayName 
+    ? `\nIMPORTANT: The closing must insert a blank line before the professional closing (e.g., "Best regards", "Looking forward to working with you"). Then put the freelancer's name on the next line: ${displayName}`
+    : '';
 
   return `You are refining an existing Upwork proposal. Your task is to ${refinementInstructions[refinementType]} ${toneInstruction}
 
@@ -549,7 +562,7 @@ IMPORTANT: You MUST return your response as a valid JSON object with the SAME sc
   "portfolioLink": "string - portfolio URL if relevant",
   "availability": "string - availability statement",
   "support": "string - post-delivery support mention",
-  "closing": "string - call-to-action to chat or move forward"
+  "closing": "${displayName ? `string - call-to-action to chat or move forward. Insert a blank line before the professional closing; then put the freelancer's name on the next line: ${displayName}` : 'string - call-to-action to chat or move forward'}"
 }
 
 Current Proposal:
@@ -558,7 +571,7 @@ ${JSON.stringify(currentProposal, null, 2)}
 Job Title: ${jobTitle}
 Client Name: ${clientName}
 
-Instructions: ${refinementInstructions[refinementType]} ${toneInstruction}
+Instructions: ${refinementInstructions[refinementType]} ${toneInstruction}${closingNote}
 
 CRITICAL: Your response must be ONLY a valid JSON object. Maintain all the core information but apply the requested refinement.`;
 }
