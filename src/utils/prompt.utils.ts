@@ -313,22 +313,24 @@ export async function updateUserPromptLimit(userId: string): Promise<void> {
 export async function storeProposalHistory(
   userId: string,
   proposalReq: ProposalReq,
-  proposalResponse: ProposalResponse
+  proposalResponse: ProposalResponse,
+  cap: number = 5
 ): Promise<string> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
     const now = new Date();
-    const proposalId = crypto.randomUUID();
-    
-    // Add version info to proposal response
+    const col = db.collection("proposal_history");
+    const preCreatedRef = col.doc();
+    const proposalId = preCreatedRef.id;
+
     const proposalWithVersion = {
       ...proposalResponse,
       version: 0,
       versionId: proposalId,
-      proposalId
+      proposalId,
     };
-    
+
     const proposalHistory: Omit<ProposalHistory, "id"> = {
       userId,
       clientName: proposalReq.client_name,
@@ -342,8 +344,63 @@ export async function storeProposalHistory(
       allRefinementIds: [],
     };
 
-    const docRef = await db.collection("proposal_history").add(proposalHistory);
-    return docRef.id;
+    let createdId: string | undefined;
+    try {
+      createdId = await db.runTransaction(async (tx) => {
+        
+      const recentQ = col
+        .where("userId", "==", userId)
+        .orderBy("createdAt", "desc")
+        .limit(cap);
+      const recentSnap = await tx.get(recentQ);
+
+      if (recentSnap.size >= cap) {
+        const deleteCount = recentSnap.size - cap + 1;
+        const oldestQ = col
+          .where("userId", "==", userId)
+          .orderBy("createdAt", "asc")
+          .limit(deleteCount);
+        const oldestSnap = await tx.get(oldestQ);
+        for (const d of oldestSnap.docs) {
+          tx.delete(d.ref);
+        }
+      }
+
+      tx.set(preCreatedRef, proposalHistory);
+      return preCreatedRef.id;
+      });
+    } catch (err) {
+      console.error("storeProposalHistory transaction failed; falling back to direct write", err);
+      await preCreatedRef.set(proposalHistory);
+      createdId = preCreatedRef.id;
+    }
+
+    if (createdId) {
+      try {
+        while (true) {
+          const overflowSnap = await col
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .offset(cap)
+            .limit(200)
+            .get();
+
+          if (overflowSnap.empty) break;
+
+          const batch = db.batch();
+          for (const d of overflowSnap.docs) {
+            batch.delete(d.ref);
+          }
+          await batch.commit();
+
+          if (overflowSnap.size < 200) break;
+        }
+      } catch (cleanupErr) {
+        console.warn("Overflow cleanup skipped due to error (likely missing index)", cleanupErr);
+      }
+    }
+
+    return createdId;
   } finally {
     closeFirebaseApp();
   }

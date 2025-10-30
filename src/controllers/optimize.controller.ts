@@ -883,3 +883,57 @@ export async function getProposalVersionsController(req: Request, res: Response)
     );
   }
 }
+
+// Cron: delete proposal history older than 30 days
+export async function cleanupOldProposalHistory(req: Request, res: Response) {
+  try {
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+
+    const secret = process.env.CRON_SECRET;
+    if (secret) {
+      const provided = req.headers["x-cron-secret"] as string | undefined;
+      if (!provided || provided !== secret) {
+        return res.status(401).json(newErrorResponse("Unauthorized", "Invalid cron secret"));
+      }
+    }
+
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    let deleted = 0;
+
+    while (true) {
+      const snap = await db
+        .collection("proposal_history")
+        .where("createdAt", "<", cutoff)
+        .orderBy("createdAt", "asc")
+        .limit(500)
+        .get();
+
+      if (snap.empty) break;
+
+      const batch = db.batch();
+      for (const doc of snap.docs) {
+        batch.delete(doc.ref);
+      }
+      await batch.commit();
+      deleted += snap.size;
+
+      if (snap.size < 500) break;
+    }
+
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Cleanup Completed",
+          "Deleted proposal history older than 30 days",
+          { deleted, cutoff: cutoff.toISOString() }
+        )
+      );
+  } catch (err) {
+    console.error("[cleanupOldProposalHistory] Error:", err);
+    return res
+      .status(500)
+      .json(newErrorResponse("Internal Server Error", "Cleanup failed"));
+  }
+}

@@ -9,6 +9,7 @@ import {
   getProposalByIdController,
   refineProposal,
   getProposalVersionsController,
+  cleanupOldProposalHistory,
 } from "../controllers/optimize.controller.ts";
 
 const aiRouter: ExpressRouter = Router();
@@ -588,5 +589,23 @@ aiRouter.post("/refine-proposal", authMiddleware, refineProposal);
  *         description: Internal server error
  */
 aiRouter.get("/proposal-versions/:proposalId", authMiddleware, getProposalVersionsController);
+
+/**
+ * @swagger
+ * /api/v1/ai/cron/cleanup-proposal-history-30d:
+ *   get:
+ *     summary: Delete proposal history older than 30 days
+ *     description: Deletes all proposal_history entries older than 30 days. Intended for daily cron.
+ *     tags:
+ *       - AI
+ *     responses:
+ *       200:
+ *         description: Cleanup completed
+ *       401:
+ *         description: Unauthorized when CRON_SECRET is set and missing/invalid
+ *       500:
+ *         description: Internal server error
+ */
+aiRouter.get("/cron/cleanup-proposal-history-30d", cleanupOldProposalHistory);
 
 export default aiRouter;
