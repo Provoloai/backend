@@ -35,6 +35,11 @@ interface WelcomeEmailData {
   email: string;
 }
 
+interface VerificationEmailData {
+  email: string;
+  otp: string;
+}
+
 interface SupportEmailData {
   name: string;
   email: string;
@@ -264,6 +269,41 @@ export const sendCustomEmail = async (
   }
 
   return await sendMail(mailOptions);
+};
+
+// Send email verification OTP
+export const sendVerificationEmail = async (
+  data: VerificationEmailData
+): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+  try {
+    // Load the email verification template
+    const template = loadEmailTemplate("email_verification");
+
+    // Format OTP with spaces for better readability (e.g., "123456" -> "123 456")
+    const formattedOTP = data.otp.match(/.{1,3}/g)?.join(" ") || data.otp;
+
+    // Replace template variables
+    const htmlContent = replaceTemplateVariables(template, {
+      OTP_CODE: formattedOTP,
+    });
+
+    // Send the email
+    return await sendMail({
+      to: data.email,
+      subject: "Verify Your Email - Provolo",
+      html: htmlContent,
+      text: `Use the code below to verify your email: ${data.otp}`,
+    });
+  } catch (error) {
+    console.error("Error sending verification email:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to send verification email",
+    };
+  }
 };
 
 // Test email configuration

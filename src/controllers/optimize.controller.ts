@@ -29,12 +29,41 @@ import type {
 import { getFirestore } from "firebase-admin/firestore";
 import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
 
-// Helper function to get user display name from database if not in token
-async function getUserDisplayName(userId: string, tokenDisplayName?: string): Promise<string | undefined> {
+// Helper function to get user profile data (displayName, portfolioLink, professionalTitle) in one DB call
+async function getUserProfileData(
+  userId: string,
+  tokenDisplayName?: string
+): Promise<{
+  displayName: string | undefined;
+  portfolioLink: string | null;
+  professionalTitle: string | null;
+}> {
+  // Use displayName from token if available
   if (tokenDisplayName) {
-    return tokenDisplayName;
+    try {
+      const app = getFirebaseApp();
+      const db = getFirestore(app);
+      const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+      
+      if (!userSnap.empty && userSnap.docs[0]) {
+        const userData = userSnap.docs[0].data();
+        return {
+          displayName: tokenDisplayName,
+          portfolioLink: userData.portfolioLink || null,
+          professionalTitle: userData.professionalTitle || null,
+        };
+      }
+    } catch (err) {
+      console.error("[getUserProfileData] Error fetching user profile data:", err);
+    }
+    return {
+      displayName: tokenDisplayName,
+      portfolioLink: null,
+      professionalTitle: null,
+    };
   }
   
+  // Fetch all data from database if displayName not in token
   try {
     const app = getFirebaseApp();
     const db = getFirestore(app);
@@ -42,13 +71,21 @@ async function getUserDisplayName(userId: string, tokenDisplayName?: string): Pr
     
     if (!userSnap.empty && userSnap.docs[0]) {
       const userData = userSnap.docs[0].data();
-      return userData.displayName;
+      return {
+        displayName: userData.displayName,
+        portfolioLink: userData.portfolioLink || null,
+        professionalTitle: userData.professionalTitle || null,
+      };
     }
   } catch (err) {
-    console.error("[getUserDisplayName] Error fetching display name:", err);
+    console.error("[getUserProfileData] Error fetching user profile data:", err);
   }
   
-  return undefined;
+  return {
+    displayName: undefined,
+    portfolioLink: null,
+    professionalTitle: null,
+  };
 }
 
 interface PromptReq {
@@ -424,15 +461,16 @@ export async function generateProposal(req: Request, res: Response) {
         );
     }
 
-    // 4. Get user display name
-    const displayName = await getUserDisplayName(userId, req.userDisplayName);
+    // 4. Get user profile data (displayName, portfolioLink, professionalTitle) in one DB call
+    const { displayName, portfolioLink, professionalTitle } = await getUserProfileData(userId, req.userDisplayName);
 
     // 5. Sanitize input (simple trim)
     const sanitizedClientName = client_name.trim();
     const sanitizedJobTitle = job_title.trim();
     const sanitizedJobSummary = job_summary.trim();
 
-    const inputContent = `Client Name: ${sanitizedClientName}\nJob Title: ${sanitizedJobTitle}\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
+    // Use professional title from profile if available (for context, though job_title is the job being applied for)
+    const inputContent = `Client Name: ${sanitizedClientName}\nJob Title: ${sanitizedJobTitle}${professionalTitle ? `\nYour Professional Title: ${professionalTitle}` : ""}\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
     const content = proposalPrompt(inputContent, displayName);
 
     // 5. Call AI model
@@ -553,6 +591,11 @@ export async function generateProposal(req: Request, res: Response) {
       if (!proposalResponse[field as keyof ProposalResponse]) {
         (proposalResponse as any)[field] = `[${field} not provided]`;
       }
+    }
+
+    // Always use portfolioLink from user profile if available, overriding AI response
+    if (portfolioLink) {
+      proposalResponse.portfolioLink = portfolioLink;
     }
 
     // 6.5. Combine components into MDX
@@ -791,7 +834,7 @@ export async function refineProposal(req: Request, res: Response) {
     const { proposal: currentProposal, refinementOrder } = await getLatestProposalVersion(proposalId, userId);
 
     // 4a. Get user display name
-    const displayName = await getUserDisplayName(userId, req.userDisplayName);
+    const { displayName } = await getUserProfileData(userId, req.userDisplayName);
 
     // 5. Call AI for refinement
     const prompt = refineProposalPrompt(

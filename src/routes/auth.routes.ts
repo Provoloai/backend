@@ -7,7 +7,10 @@ import {
   logout,
   signupOrEnsureUser,
   updateUsername,
+  updateProfile,
   verifySession,
+  verifyEmail,
+  resendVerificationOTP,
 } from "../controllers/auth.controller.ts";
 
 const authRouter: ExpressRouter = Router();
@@ -179,5 +182,164 @@ authRouter.post("/logout", logout);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 authRouter.put("/update-username", strictRateLimiter(), authMiddleware, updateUsername);
+
+/**
+ * @swagger
+ * /api/v1/auth/update-profile:
+ *   put:
+ *     summary: Update user profile
+ *     description: Updates the user's profile link and/or professional title
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - sessionCookie: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               portfolio_link:
+ *                 type: string
+ *                 format: uri
+ *                 description: Portfolio URL (must start with http:// or https://)
+ *                 example: "https://example.com/portfolio"
+ *               professional_title:
+ *                 type: string
+ *                 maxLength: 200
+ *                 description: User's professional title (e.g., "Full Stack Developer")
+ *                 example: "Full Stack Developer"
+ *             description: At least one field must be provided
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         userId:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         displayName:
+ *                           type: string
+ *                           nullable: true
+ *                         tierId:
+ *                           type: string
+ *                         polarId:
+ *                           type: string
+ *                           nullable: true
+ *                         mailerliteId:
+ *                           type: string
+ *                           nullable: true
+ *                         portfolioLink:
+ *                           type: string
+ *                           nullable: true
+ *                           description: Portfolio URL (camelCase)
+ *                         professionalTitle:
+ *                           type: string
+ *                           nullable: true
+ *                           description: Professional title (camelCase)
+ *                         createdAt:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *                         updatedAt:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *       400:
+ *         description: Invalid input or missing fields
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       429:
+ *         description: Rate limit exceeded
+ */
+authRouter.put("/update-profile", strictRateLimiter(), authMiddleware, updateProfile);
+
+/**
+ * @swagger
+ * /api/v1/auth/verify-email:
+ *   post:
+ *     summary: Verify email with OTP
+ *     description: Verifies the user's email address using the OTP code sent to their email
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - sessionCookie: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               otp:
+ *                 type: string
+ *                 description: 6-digit OTP code received via email
+ *                 example: "123456"
+ *                 minLength: 6
+ *                 maxLength: 6
+ *             required:
+ *               - otp
+ *     responses:
+ *       200:
+ *         description: Email verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ *       400:
+ *         description: Invalid OTP, expired OTP, or already verified
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       429:
+ *         description: Rate limit exceeded
+ */
+authRouter.post("/verify-email", strictRateLimiter(), authMiddleware, verifyEmail);
+
+/**
+ * @swagger
+ * /api/v1/auth/resend-verification-otp:
+ *   post:
+ *     summary: Resend verification OTP
+ *     description: Resends a new OTP code to the user's email address
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - sessionCookie: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Verification code sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ *       400:
+ *         description: Email already verified
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       429:
+ *         description: Rate limit exceeded
+ */
+authRouter.post("/resend-verification-otp", strictRateLimiter(), authMiddleware, resendVerificationOTP);
 
 export default authRouter;

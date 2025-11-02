@@ -6,20 +6,50 @@ import { closeFirebaseApp, getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import { newSuccessResponse, newErrorResponse } from "../utils/apiResponse.ts";
 import { createQuotaHistoryFromTier } from "../utils/quota.utils.ts";
 import { createPolarCustomer } from "../utils/polarClient.ts";
-import { sendWelcomeEmail } from "../services/mail.service.ts";
+import { sendWelcomeEmail, sendVerificationEmail } from "../services/mail.service.ts";
 import { subscribeUser } from "../services/mailerlite.service.ts";
 
-// Types
 import type { NewUser, User } from "../types/user.ts";
 import type { Request, Response } from "express";
 import type { Timestamp } from "firebase-admin/firestore";
 import type { DecodedIdToken, UserRecord } from "firebase-admin/auth";
 
+// Generates a 6-digit OTP code for email verification
+function generateOTP(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Removes sensitive OTP fields from user object before sending to frontend
+function createSafeUserObject(user: User): Omit<User, "otp" | "otpExpires"> {
+  const { otp, otpExpires, ...safeUser } = user;
+  return safeUser;
+}
+
+// Generates and stores a new OTP code for email verification, then sends it via email (expires after 15 minutes)
+export async function generateAndSendOTP(userId: string, email: string, db: FirebaseFirestore.Firestore): Promise<void> {
+  const otp = generateOTP();
+  const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+  const usersRef = db.collection("users");
+  const userQuery = usersRef.where("userId", "==", userId).limit(1);
+  const docs = await userQuery.get();
+
+  if (!docs.empty && docs.docs[0]) {
+    await docs.docs[0].ref.update({
+      otp,
+      otpExpires,
+      updatedAt: new Date(),
+    });
+
+    await sendVerificationEmail({ email, otp });
+  }
+}
+
+// Authenticates user with Firebase ID token and creates a session cookie (does not send OTP automatically to avoid spamming users)
 export async function login(req: Request, res: Response) {
   try {
     const { idToken } = req.body;
 
-    // Validate request body
     if (!idToken) {
       return res
         .status(400)
@@ -31,12 +61,10 @@ export async function login(req: Request, res: Response) {
         );
     }
 
-    // Initialize Firebase
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // Verify ID token
     let token: DecodedIdToken | null = null;
     try {
       token = await auth.verifyIdToken(idToken);
@@ -51,7 +79,6 @@ export async function login(req: Request, res: Response) {
         );
     }
 
-    // Create session cookie (expires in 5 days)
     let cookie;
     try {
       cookie = await auth.createSessionCookie(idToken, {
@@ -68,7 +95,6 @@ export async function login(req: Request, res: Response) {
         );
     }
 
-    // Set HTTP-only cookie
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
@@ -77,7 +103,6 @@ export async function login(req: Request, res: Response) {
       httpOnly: true,
     });
 
-    // Get user data in Firestore
     const usersRef = db.collection("users");
     const userQuery = usersRef.where("userId", "==", token.uid).limit(1);
     const docs = await userQuery.get();
@@ -106,6 +131,7 @@ export async function login(req: Request, res: Response) {
     }
 
     const data = doc.data();
+    const emailVerified = data.emailVerified === true;
     const user: User = {
       id: doc.id,
       userId: data.userId,
@@ -114,6 +140,15 @@ export async function login(req: Request, res: Response) {
       tierId: data.tierId,
       mailerliteId: data.mailerliteId || null,
       polarId: data.polarId || null,
+      portfolioLink: data.portfolioLink || null,
+      professionalTitle: data.professionalTitle || null,
+      emailVerified,
+      otp: data.otp || null,
+      otpExpires: data.otpExpires
+        ? data.otpExpires instanceof Date
+          ? data.otpExpires
+          : new Date((data.otpExpires as Timestamp).seconds * 1000)
+        : null,
       createdAt: data.createdAt
         ? data.createdAt instanceof Date
           ? data.createdAt
@@ -132,7 +167,7 @@ export async function login(req: Request, res: Response) {
         newSuccessResponse(
           "Login Successful",
           "User authenticated successfully",
-          user
+          createSafeUserObject(user)
         )
       );
   } catch (err) {
@@ -147,12 +182,12 @@ export async function login(req: Request, res: Response) {
   }
 }
 
+// Handles user signup or ensures user exists in Firestore (creates new user with starter tier, sends verification email with OTP, creates session cookie)
 export async function signupOrEnsureUser(req: Request, res: Response) {
   try {
     const starterTierId = process.env.STARTER_TIER_ID || "";
     const { idToken } = req.body;
 
-    // Validate request body
     if (!idToken)
       return res
         .status(400)
@@ -163,12 +198,10 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           )
         );
 
-    // Initialize Firebase
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // Verify ID token
     let decodedUserInfo: DecodedIdToken | null = null;
     try {
       decodedUserInfo = (await auth.verifyIdToken(idToken)) as DecodedIdToken;
@@ -186,7 +219,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     const userID = decodedUserInfo.uid;
     let userRecord: UserRecord | null = null;
 
-    // Get Firebase Auth UserRecord
     try {
       userRecord = (await auth.getUser(userID)) as UserRecord;
     } catch (err) {
@@ -200,7 +232,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
     }
 
-    // Get or create user data in Firestore
     const usersRef = db.collection("users");
     const userQuery = usersRef.where("userId", "==", userID).limit(1);
     const docs = await userQuery.get();
@@ -210,10 +241,11 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     const now: Date = new Date();
 
     if (!docs.empty && docs.docs.length > 0) {
-      // User exists
+      // Existing user - retrieve their data
       const existingUserDoc = docs.docs[0];
       if (existingUserDoc) {
         const existingUserData: User = existingUserDoc.data() as User;
+        const emailVerified = existingUserData.emailVerified === true;
         userData = {
           id: existingUserDoc.id,
           userId: userID,
@@ -222,6 +254,15 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           tierId: existingUserData.tierId || starterTierId,
           mailerliteId: null,
           polarId: existingUserData.polarId || null,
+          portfolioLink: existingUserData.portfolioLink || null,
+          professionalTitle: existingUserData.professionalTitle || null,
+          emailVerified: existingUserData.emailVerified === true,
+          otp: existingUserData.otp || null,
+          otpExpires: existingUserData.otpExpires
+            ? existingUserData.otpExpires instanceof Date
+              ? existingUserData.otpExpires
+              : new Date((existingUserData.otpExpires as Timestamp).seconds * 1000)
+            : null,
           createdAt: existingUserData.createdAt
             ? existingUserData.createdAt instanceof Date
               ? existingUserData.createdAt
@@ -239,8 +280,11 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         };
       }
     } else {
-      // Create new user
+      // New user - create account with starter tier and send verification email
       isNewUser = true;
+      const otp = generateOTP();
+      const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
+
       const newUserData: NewUser = {
         userId: userID,
         email: userRecord.email!,
@@ -248,6 +292,11 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         tierId: starterTierId,
         mailerliteId: null,
         polarId: null,
+        portfolioLink: null,
+        professionalTitle: null,
+        emailVerified: false,
+        otp,
+        otpExpires,
         createdAt: now,
         updatedAt: now,
       };
@@ -258,7 +307,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         ...newUserData,
       };
 
-      // Create Polar customer for new user
       try {
         const polarCustomerResult = await createPolarCustomer({
           userId: userID,
@@ -266,7 +314,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           name: userRecord.displayName || userRecord.email!,
         });
 
-        // Update user document with polarId
         await docRef.update({
           polarId: polarCustomerResult.id,
           updatedAt: now,
@@ -280,11 +327,15 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
       }
 
-      // Create quota history for new users
       await createQuotaHistoryFromTier(userID, starterTierId, false);
+
+      try {
+        await sendVerificationEmail({ email: userRecord.email!, otp });
+      } catch (error) {
+        console.error("[signupOrEnsureUser] Error sending verification email:", error);
+      }
     }
 
-    // Create session cookie
     let cookie;
     try {
       cookie = await auth.createSessionCookie(idToken, {
@@ -302,7 +353,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
     }
 
-    // Set the session cookie
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
@@ -316,7 +366,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       : "User profile retrieved";
 
     const action = isNewUser ? "Signup Successful" : "Login Successful";
-    return res.status(200).json(newSuccessResponse(action, message, userData));
+    return res.status(200).json(newSuccessResponse(action, message, userData ? createSafeUserObject(userData) : null));
   } catch (err) {
     console.error("Signup Error:", err);
     return res
@@ -330,6 +380,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
   }
 }
 
+// Verifies if the current session cookie is valid and returns user data
 export async function verifySession(req: Request, res: Response) {
   try {
     const sessionCookie = getCookie(req, "session");
@@ -345,7 +396,6 @@ export async function verifySession(req: Request, res: Response) {
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // Verify session cookie
     let decodedUserInfo: DecodedIdToken | null = null;
     try {
       decodedUserInfo = await auth.verifySessionCookie(sessionCookie, true);
@@ -360,7 +410,6 @@ export async function verifySession(req: Request, res: Response) {
         );
     }
 
-    // Get user data in Firestore
     const usersRef = db.collection("users");
     const userQuery = usersRef
       .where("userId", "==", decodedUserInfo.uid)
@@ -378,6 +427,7 @@ export async function verifySession(req: Request, res: Response) {
         );
     }
     const data = doc.data();
+    const emailVerified = data.emailVerified === true;
     const user: User = {
       id: doc.id,
       userId: data.userId,
@@ -386,6 +436,15 @@ export async function verifySession(req: Request, res: Response) {
       tierId: data.tierId,
       polarId: data.polarId || null,
       mailerliteId: data.mailerliteId || null,
+      portfolioLink: data.portfolioLink || null,
+      professionalTitle: data.professionalTitle || null,
+      emailVerified,
+      otp: data.otp || null,
+      otpExpires: data.otpExpires
+        ? data.otpExpires instanceof Date
+          ? data.otpExpires
+          : new Date((data.otpExpires as Timestamp).seconds * 1000)
+        : null,
       createdAt: data.createdAt
         ? data.createdAt instanceof Date
           ? data.createdAt
@@ -400,7 +459,7 @@ export async function verifySession(req: Request, res: Response) {
 
     return res
       .status(200)
-      .json(newSuccessResponse("Session Valid", "Session is valid", user));
+      .json(newSuccessResponse("Session Valid", "Session is valid", createSafeUserObject(user)));
   } catch (err) {
     console.error("Verify Session Error:", err);
     return res
@@ -418,7 +477,6 @@ export async function logout(req: Request, res: Response) {
   try {
     const sessionCookie = getCookie(req, "session");
 
-    // Clear the session cookie first
     res.cookie("session", "", {
       maxAge: -1,
       path: "/",
@@ -427,22 +485,18 @@ export async function logout(req: Request, res: Response) {
       httpOnly: true,
     });
 
-    // If we have a session cookie, revoke it on Firebase
     if (sessionCookie) {
       try {
         const app = getFirebaseApp();
         const auth = getAuth(app);
 
-        // Verify the session to get the UID
         const decodedToken = await auth.verifySessionCookie(
           sessionCookie,
           true
         );
 
-        // Revoke all refresh tokens for this user
         await auth.revokeRefreshTokens(decodedToken.uid);
       } catch (err) {
-        // Log the error but don't fail the logout
         console.error("Failed to revoke Firebase session:", err);
       }
     }
@@ -461,11 +515,11 @@ export async function logout(req: Request, res: Response) {
   }
 }
 
+// Updates user's display name/username (for first-time users, sends welcome email and subscribes to MailerLite)
 export async function updateUsername(req: Request, res: Response) {
   try {
     const { username } = req.body;
 
-    // Validate username
     if (
       !username ||
       typeof username !== "string" ||
@@ -488,7 +542,6 @@ export async function updateUsername(req: Request, res: Response) {
         );
     }
 
-    // Ensure userID and userEmail are present
     if (!req.userID || !req.userEmail) {
       return res
         .status(401)
@@ -500,17 +553,14 @@ export async function updateUsername(req: Request, res: Response) {
         );
     }
 
-    // Check if this is a first-time user (no displayName)
     const isFirstTimeUser =
       !req.userDisplayName || req.userDisplayName.trim() === "";
     const now = new Date();
 
-    // Initialize Firebase
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // Update username in Firebase Auth
     try {
       await auth.updateUser(req.userID, { displayName: username });
     } catch (authErr) {
@@ -525,7 +575,6 @@ export async function updateUsername(req: Request, res: Response) {
         );
     }
 
-    // Update username in Firestore
     let userDoc;
     try {
       const usersRef = db.collection("users");
@@ -557,9 +606,7 @@ export async function updateUsername(req: Request, res: Response) {
         );
     }
 
-    // Send welcome email and subscribe to MailerLite for first-time users
     if (isFirstTimeUser) {
-      // Send welcome email
       try {
         const emailResult = await sendWelcomeEmail({
           name: username,
@@ -575,7 +622,6 @@ export async function updateUsername(req: Request, res: Response) {
         console.error("Error sending welcome email:", emailErr);
       }
 
-      // Subscribe to MailerLite for campaigns
       try {
         const subscribeUserResult = await subscribeUser(username, req.userEmail);
 
@@ -593,7 +639,6 @@ export async function updateUsername(req: Request, res: Response) {
       }
     }
 
-    // Get updated user data for response
     try {
       const usersRef = db.collection("users");
       const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
@@ -614,6 +659,15 @@ export async function updateUsername(req: Request, res: Response) {
         tierId: userData.tierId,
         polarId: userData.polarId || null,
         mailerliteId: userData.mailerliteId || null,
+        portfolioLink: userData.portfolioLink || null,
+        professionalTitle: userData.professionalTitle || null,
+        emailVerified: userData.emailVerified === true,
+        otp: userData.otp || null,
+        otpExpires: userData.otpExpires
+          ? userData.otpExpires instanceof Date
+            ? userData.otpExpires
+            : new Date((userData.otpExpires as Timestamp).seconds * 1000)
+          : null,
         createdAt: userData.createdAt
           ? userData.createdAt instanceof Date
             ? userData.createdAt
@@ -632,7 +686,7 @@ export async function updateUsername(req: Request, res: Response) {
           newSuccessResponse(
             "Username Updated",
             "Username updated successfully. Please log in again to refresh your session with the new username.",
-            user
+            createSafeUserObject(user)
           )
         );
     } catch (userErr) {
@@ -655,6 +709,403 @@ export async function updateUsername(req: Request, res: Response) {
         newErrorResponse(
           "Update Username Error",
           "Unable to update your username. Please contact support if this continues."
+        )
+      );
+  } finally {
+    closeFirebaseApp();
+  }
+}
+
+// Updates user profile fields: portfolio_link and professional_title
+export async function updateProfile(req: Request, res: Response) {
+  try {
+    const { portfolio_link, professional_title } = req.body;
+
+    if (!req.userID) {
+      return res
+        .status(401)
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to update your profile."
+          )
+        );
+    }
+
+    if (portfolio_link !== undefined) {
+      if (typeof portfolio_link !== "string" || (portfolio_link.trim() && !/^https?:\/\/.+/.test(portfolio_link.trim()))) {
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Invalid Portfolio Link",
+              "Portfolio link must be a valid URL starting with http:// or https://"
+            )
+          );
+      }
+    }
+
+    if (professional_title !== undefined) {
+      if (typeof professional_title !== "string" || professional_title.length > 200) {
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Invalid Professional Title",
+              "Professional title must be a string and not exceed 200 characters."
+            )
+          );
+      }
+    }
+
+    if (portfolio_link === undefined && professional_title === undefined) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "At least one field (portfolio_link or professional_title) must be provided."
+          )
+        );
+    }
+
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+    const now = new Date();
+
+    const usersRef = db.collection("users");
+    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
+    const docs = await userQuery.get();
+
+    if (docs.empty || !docs.docs[0]) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse(
+            "User Not Found",
+            "Your user record could not be found. Please contact support."
+          )
+        );
+    }
+
+    const userDoc = docs.docs[0];
+    const updateData: any = { updatedAt: now };
+
+    if (portfolio_link !== undefined) {
+      updateData.portfolioLink = portfolio_link.trim() || null;
+    }
+
+    if (professional_title !== undefined) {
+      updateData.professionalTitle = professional_title.trim() || null;
+    }
+
+    await userDoc.ref.update(updateData);
+
+    const updatedDocs = await userQuery.get();
+    const updatedUserDoc = updatedDocs.docs[0];
+    
+    if (!updatedUserDoc) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse(
+            "User Not Found",
+            "Your user record could not be found after update. Please contact support."
+          )
+        );
+    }
+
+    const userData = updatedUserDoc.data();
+
+    const user: User = {
+      id: updatedUserDoc.id,
+      userId: userData.userId,
+      email: userData.email,
+      displayName: userData.displayName || null,
+      tierId: userData.tierId,
+      polarId: userData.polarId || null,
+      mailerliteId: userData.mailerliteId || null,
+      portfolioLink: userData.portfolioLink || null,
+      professionalTitle: userData.professionalTitle || null,
+      emailVerified: userData.emailVerified === true,
+      otp: userData.otp || null,
+      otpExpires: userData.otpExpires
+        ? userData.otpExpires instanceof Date
+          ? userData.otpExpires
+          : new Date((userData.otpExpires as Timestamp).seconds * 1000)
+        : null,
+      createdAt: userData.createdAt
+        ? userData.createdAt instanceof Date
+          ? userData.createdAt
+          : new Date((userData.createdAt as Timestamp).seconds * 1000)
+        : undefined,
+      updatedAt: userData.updatedAt
+        ? userData.updatedAt instanceof Date
+          ? userData.updatedAt
+          : new Date((userData.updatedAt as Timestamp).seconds * 1000)
+        : undefined,
+    };
+
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Profile Updated",
+          "Profile updated successfully",
+          createSafeUserObject(user)
+        )
+      );
+  } catch (err) {
+    console.error("Update Profile Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Update Profile Error",
+          "Unable to update your profile. Please contact support if this continues."
+        )
+      );
+  } finally {
+    closeFirebaseApp();
+  }
+}
+
+// Verifies user's email address using the OTP code (validates OTP, checks expiration, and marks email as verified)
+export async function verifyEmail(req: Request, res: Response) {
+  try {
+    const { otp } = req.body;
+
+    if (!req.userID) {
+      return res
+        .status(401)
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to verify your email."
+          )
+        );
+    }
+
+    if (!otp || typeof otp !== "string" || otp.length !== 6) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid OTP",
+            "Please provide a valid 6-digit OTP code."
+          )
+        );
+    }
+
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+    const now = new Date();
+
+    const usersRef = db.collection("users");
+    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
+    const docs = await userQuery.get();
+
+    if (docs.empty || !docs.docs[0]) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse(
+            "User Not Found",
+            "Your user record could not be found. Please contact support."
+          )
+        );
+    }
+
+    const userDoc = docs.docs[0];
+    const userData = userDoc.data();
+
+    if (userData.emailVerified === true) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Already Verified",
+            "Your email has already been verified."
+          )
+        );
+    }
+
+    if (!userData.otp || userData.otp !== otp) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid OTP",
+            "The OTP code you entered is incorrect. Please check and try again."
+          )
+        );
+    }
+
+    const otpExpires = userData.otpExpires
+      ? userData.otpExpires instanceof Date
+        ? userData.otpExpires
+        : new Date((userData.otpExpires as Timestamp).seconds * 1000)
+      : null;
+
+    if (!otpExpires || otpExpires < now) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "OTP Expired",
+            "The OTP code has expired. Please request a new one."
+          )
+        );
+    }
+
+    await userDoc.ref.update({
+      emailVerified: true,
+      otp: null,
+      otpExpires: null,
+      updatedAt: now,
+    });
+
+    const updatedDocs = await userQuery.get();
+    const updatedUserDoc = updatedDocs.docs[0];
+
+    if (!updatedUserDoc) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse(
+            "User Not Found",
+            "Your user record could not be found after verification. Please contact support."
+          )
+        );
+    }
+
+    const updatedData = updatedUserDoc.data();
+    const user: User = {
+      id: updatedUserDoc.id,
+      userId: updatedData.userId,
+      email: updatedData.email,
+      displayName: updatedData.displayName || null,
+      tierId: updatedData.tierId,
+      polarId: updatedData.polarId || null,
+      mailerliteId: updatedData.mailerliteId || null,
+      portfolioLink: updatedData.portfolioLink || null,
+      professionalTitle: updatedData.professionalTitle || null,
+      emailVerified: true,
+      otp: null,
+      otpExpires: null,
+      createdAt: updatedData.createdAt
+        ? updatedData.createdAt instanceof Date
+          ? updatedData.createdAt
+          : new Date((updatedData.createdAt as Timestamp).seconds * 1000)
+        : undefined,
+      updatedAt: updatedData.updatedAt
+        ? updatedData.updatedAt instanceof Date
+          ? updatedData.updatedAt
+          : new Date((updatedData.updatedAt as Timestamp).seconds * 1000)
+        : undefined,
+    };
+
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Email Verified",
+          "Your email has been successfully verified.",
+          createSafeUserObject(user)
+        )
+      );
+  } catch (err) {
+    console.error("Verify Email Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Verification Error",
+          "Unable to verify your email. Please contact support if this continues."
+        )
+      );
+  } finally {
+    closeFirebaseApp();
+  }
+}
+
+// Resends a new OTP code to the user's email for verification (only works if email is not already verified)
+export async function resendVerificationOTP(req: Request, res: Response) {
+  try {
+    if (!req.userID) {
+      return res
+        .status(401)
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to request a verification code."
+          )
+        );
+    }
+
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+
+    const usersRef = db.collection("users");
+    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
+    const docs = await userQuery.get();
+
+    if (docs.empty || !docs.docs[0]) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse(
+            "User Not Found",
+            "Your user record could not be found. Please contact support."
+          )
+        );
+    }
+
+    const userDoc = docs.docs[0];
+    const userData = userDoc.data();
+
+    if (userData.emailVerified === true) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Already Verified",
+            "Your email has already been verified."
+          )
+        );
+    }
+
+    try {
+      await generateAndSendOTP(req.userID, userData.email, db);
+    } catch (error) {
+      console.error("[resendVerificationOTP] Error sending OTP:", error);
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "Error Sending OTP",
+            "Failed to send verification code. Please try again later."
+          )
+        );
+    }
+
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Verification Code Sent",
+          "A new verification code has been sent to your email.",
+          null
+        )
+      );
+  } catch (err) {
+    console.error("Resend OTP Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Resend OTP Error",
+          "Unable to send verification code. Please contact support if this continues."
         )
       );
   } finally {

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
-import { authMiddleware } from "../middlewares/auth.middleware.ts";
+import { authMiddleware, emailVerificationMiddleware } from "../middlewares/auth.middleware.ts";
 import {
   optimizeProfile,
   optimizeLinkedIn,
@@ -79,7 +79,7 @@ const aiRouter: ExpressRouter = Router();
  *       500:
  *         description: Internal Server Error - AI service or client creation failed
  */
-aiRouter.post("/optimize-upwork", authMiddleware, optimizeProfile);
+aiRouter.post("/optimize-upwork", authMiddleware, emailVerificationMiddleware, optimizeProfile);
 
 /**
  * @swagger
@@ -153,7 +153,7 @@ aiRouter.post("/optimize-upwork", authMiddleware, optimizeProfile);
  *       500:
  *         description: Internal Server Error - AI service or client creation failed
  */
-aiRouter.post("/optimize-linkedin", authMiddleware, optimizeLinkedIn);
+aiRouter.post("/optimize-linkedin", authMiddleware, emailVerificationMiddleware, optimizeLinkedIn);
 
 /**
  * @swagger
@@ -250,7 +250,7 @@ aiRouter.post("/optimize-linkedin", authMiddleware, optimizeLinkedIn);
  *       500:
  *         description: Internal Server Error - AI service or client creation failed
  */
-aiRouter.post("/generate-proposal", authMiddleware, generateProposal);
+aiRouter.post("/generate-proposal", authMiddleware, emailVerificationMiddleware, generateProposal);
 
 /**
  * @swagger
@@ -354,7 +354,7 @@ aiRouter.post("/generate-proposal", authMiddleware, generateProposal);
  *       500:
  *         description: Internal Server Error - Failed to retrieve proposal history
  */
-aiRouter.get("/proposal-history", authMiddleware, getProposalHistory);
+aiRouter.get("/proposal-history", authMiddleware, emailVerificationMiddleware, getProposalHistory);
 
 /**
  * @swagger
@@ -514,7 +514,7 @@ aiRouter.get("/proposal-history", authMiddleware, getProposalHistory);
  *       500:
  *         description: Internal Server Error - Failed to retrieve proposal
  */
-aiRouter.get("/proposal-history/:proposalId", authMiddleware, getProposalByIdController);
+aiRouter.get("/proposal-history/:proposalId", authMiddleware, emailVerificationMiddleware, getProposalByIdController);
 
 /**
  * @swagger
@@ -559,7 +559,7 @@ aiRouter.get("/proposal-history/:proposalId", authMiddleware, getProposalByIdCon
  *       500:
  *         description: Internal server error
  */
-aiRouter.post("/refine-proposal", authMiddleware, refineProposal);
+aiRouter.post("/refine-proposal", authMiddleware, emailVerificationMiddleware, refineProposal);
 
 /**
  * @swagger
@@ -588,7 +588,7 @@ aiRouter.post("/refine-proposal", authMiddleware, refineProposal);
  *       500:
  *         description: Internal server error
  */
-aiRouter.get("/proposal-versions/:proposalId", authMiddleware, getProposalVersionsController);
+aiRouter.get("/proposal-versions/:proposalId", authMiddleware, emailVerificationMiddleware, getProposalVersionsController);
 
 /**
  * @swagger

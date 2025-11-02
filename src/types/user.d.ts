@@ -5,6 +5,11 @@ export interface NewUser {
   tierId: string;
   mailerliteId: string | null;
   polarId: string | null;
+  portfolioLink: string | null;
+  professionalTitle: string | null;
+  emailVerified: boolean;
+  otp: string | null;
+  otpExpires: Date | null;
   updatedAt: Date | undefined;
   createdAt: Date | undefined;
 }
