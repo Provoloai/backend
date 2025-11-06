@@ -4,6 +4,20 @@ export interface ValidationResult {
   error?: string;
 }
 
+export class SystemOverrideError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SystemOverrideError";
+  }
+}
+
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
 export function validateAndCleanJsonResponse(response: string): ValidationResult {
   if (!response || response.trim().length === 0) {
     return { isValid: false, error: "Empty response" };

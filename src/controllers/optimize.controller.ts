@@ -17,6 +17,7 @@ import {
 } from "../utils/prompt.utils.ts";
 import { updateUserQuota, checkUserQuota } from "../utils/quota.utils.ts";
 import { callGemini } from "../utils/geminiClient.ts";
+import { SystemOverrideError, ValidationError } from "../utils/responseValidator.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
 import type {
   ProposalReq,
@@ -174,6 +175,37 @@ export async function optimizeProfile(req: Request, res: Response) {
       aiResponseText = await callGemini(content, optimizerSystemInstruction());
     } catch (err: any) {
       console.error("[optimizeProfile] AI service call failed:", err);
+      
+      // If system override detected, deduct quota and return specific error
+      if (err instanceof SystemOverrideError) {
+        try {
+          await updateUserQuota(userId, "upwork_profile_optimizer");
+        } catch (quotaErr) {
+          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+        }
+        
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Invalid Request",
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
+            )
+          );
+      }
+      
+      // If validation error (400-level), return 400 status
+      if (err instanceof ValidationError) {
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Validation Error",
+              err.message || "Invalid request. Please check your input and try again."
+            )
+          );
+      }
+      
       return res
         .status(500)
         .json(
@@ -321,6 +353,37 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
       );
     } catch (err: any) {
       console.error("[optimizeLinkedIn] AI service call failed:", err);
+      
+      // If system override detected, deduct quota and return specific error
+      if (err instanceof SystemOverrideError) {
+        try {
+          await updateUserQuota(userId, "linkedin_profile_optimizer");
+        } catch (quotaErr) {
+          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+        }
+        
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Invalid Request",
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
+            )
+          );
+      }
+      
+      // If validation error (400-level), return 400 status
+      if (err instanceof ValidationError) {
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Validation Error",
+              err.message || "Invalid request. Please check your input and try again."
+            )
+          );
+      }
+      
       return res
         .status(500)
         .json(
@@ -479,6 +542,37 @@ export async function generateProposal(req: Request, res: Response) {
       aiResponseText = await callGemini(content, proposalSystemInstruction());
     } catch (err: any) {
       console.error("[generateProposal] AI service call failed:", err);
+      
+      // If system override detected, deduct quota and return specific error
+      if (err instanceof SystemOverrideError) {
+        try {
+          await updateUserQuota(userId, "ai_proposals");
+        } catch (quotaErr) {
+          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+        }
+        
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Invalid Request",
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
+            )
+          );
+      }
+      
+      // If validation error (400-level), return 400 status
+      if (err instanceof ValidationError) {
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Validation Error",
+              err.message || "Invalid request. Please check your input and try again."
+            )
+          );
+      }
+      
       return res
         .status(500)
         .json(
@@ -851,6 +945,37 @@ export async function refineProposal(req: Request, res: Response) {
       aiResponseText = await callGemini(prompt, refineProposalSystemInstruction());
     } catch (err: any) {
       console.error("[refineProposal] AI call failed:", err);
+      
+      // If system override detected, deduct quota and return specific error
+      if (err instanceof SystemOverrideError) {
+        try {
+          await updateUserQuota(userId, "ai_proposals");
+        } catch (quotaErr) {
+          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+        }
+        
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Invalid Request",
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
+            )
+          );
+      }
+      
+      // If validation error (400-level), return 400 status
+      if (err instanceof ValidationError) {
+        return res
+          .status(400)
+          .json(
+            newErrorResponse(
+              "Validation Error",
+              err.message || "Invalid request. Please check your input and try again."
+            )
+          );
+      }
+      
       return res.status(500).json(
         newErrorResponse("AI Service Error", "Failed to refine proposal. Please try again.")
       );
