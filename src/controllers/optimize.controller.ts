@@ -567,7 +567,7 @@ export async function generateProposal(req: Request, res: Response) {
     const inputContent = `Client Name: ${sanitizedClientName}\nJob Title: ${sanitizedJobTitle}${
       professionalTitle ? `\nYour Professional Title: ${professionalTitle}` : ""
     }\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
-    const content = proposalPrompt(inputContent, displayName);
+    const content = proposalPrompt(inputContent, displayName, portfolioLink);
 
     // 5. Call AI model
     let aiResponseText = "";
@@ -704,6 +704,15 @@ export async function generateProposal(req: Request, res: Response) {
             "The AI response was empty. Please try again or contact support."
           )
         );
+    }
+
+    // 6.2. Ensure portfolioLink is only set if user has one
+    // Clear any AI-generated portfolioLink if user doesn't have one
+    if (!portfolioLink) {
+      proposalResponse.portfolioLink = "";
+    } else {
+      // Always use portfolioLink from user profile if available
+      proposalResponse.portfolioLink = portfolioLink;
     }
 
     // 6.5. Validate and create MDX content
