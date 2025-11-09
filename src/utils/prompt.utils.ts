@@ -479,29 +479,35 @@ export async function storeProposalHistory(
       createdId = preCreatedRef.id;
     }
 
+    // Overflow cleanup in background (non-blocking)
     if (createdId) {
-      try {
-        while (true) {
-          const overflowSnap = await col
-            .where("userId", "==", userId)
-            .orderBy("createdAt", "desc")
-            .offset(cap)
-            .limit(200)
-            .get();
+      // Don't await - let it run in background
+      (async () => {
+        try {
+          while (true) {
+            const overflowSnap = await col
+              .where("userId", "==", userId)
+              .orderBy("createdAt", "desc")
+              .offset(cap)
+              .limit(200)
+              .get();
 
-          if (overflowSnap.empty) break;
+            if (overflowSnap.empty) break;
 
-          const batch = db.batch();
-          for (const d of overflowSnap.docs) {
-            batch.delete(d.ref);
+            const batch = db.batch();
+            for (const d of overflowSnap.docs) {
+              batch.delete(d.ref);
+            }
+            await batch.commit();
+
+            if (overflowSnap.size < 200) break;
           }
-          await batch.commit();
-
-          if (overflowSnap.size < 200) break;
+        } catch (cleanupErr) {
+          console.warn("Overflow cleanup skipped due to error (likely missing index)", cleanupErr);
         }
-      } catch (cleanupErr) {
-        console.warn("Overflow cleanup skipped due to error (likely missing index)", cleanupErr);
-      }
+      })().catch((err) => {
+        console.warn("Background overflow cleanup error:", err);
+      });
     }
 
     return createdId;

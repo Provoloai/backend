@@ -125,7 +125,34 @@ export async function optimizeProfile(req: Request, res: Response) {
         .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
-    // 2. Check quota
+    // 2. Validate input first (fast, no DB calls)
+    const { full_name, professional_title, profile } = req.body as PromptReq;
+    if (!full_name || !professional_title || !profile) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Missing required fields: full_name, professional_title, profile"
+          )
+        );
+    }
+    if (
+      full_name.length > 100 ||
+      professional_title.length > 200 ||
+      profile.length > 5000
+    ) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
+    }
+
+    // 3. Check quota
     let quotaResult;
     try {
       quotaResult = await checkUserQuota(userId, "upwork_profile_optimizer");
@@ -150,33 +177,6 @@ export async function optimizeProfile(req: Request, res: Response) {
           newErrorResponse(
             "Quota Exceeded",
             `Quota limit exceeded for profile optimizer. Current usage: ${quotaResult.count}/${limitText}. Try again in the next period.`
-          )
-        );
-    }
-
-    // 3. Validate input
-    const { full_name, professional_title, profile } = req.body as PromptReq;
-    if (!full_name || !professional_title || !profile) {
-      return res
-        .status(400)
-        .json(
-          newErrorResponse(
-            "Invalid Request",
-            "Missing required fields: full_name, professional_title, profile"
-          )
-        );
-    }
-    if (
-      full_name.length > 100 ||
-      professional_title.length > 200 ||
-      profile.length > 5000
-    ) {
-      return res
-        .status(400)
-        .json(
-          newErrorResponse(
-            "Validation Error",
-            "Input fields exceed allowed length."
           )
         );
     }
@@ -262,16 +262,12 @@ export async function optimizeProfile(req: Request, res: Response) {
         );
     }
 
-    // 7. Update quota after success
-    // Increment quota for everyone, regardless of limit
-    try {
-      await updateUserQuota(userId, "upwork_profile_optimizer");
-    } catch (err) {
-      // Log but do not fail the request
+    // 7. Update quota in background (fire and forget - don't block response)
+    updateUserQuota(userId, "upwork_profile_optimizer").catch((err) => {
       console.warn("Warning: Failed to update quota for user", userId, err);
-    }
+    });
 
-    // 8. Return success
+    // 8. Return success immediately (quota update continues in background)
     return res
       .status(200)
       .json(
@@ -305,7 +301,34 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
-    // 2. Check quota
+    // 2. Validate input first (fast, no DB calls)
+    const { full_name, professional_title, profile } = req.body as PromptReq;
+    if (!full_name || !professional_title || !profile) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Missing required fields: full_name, professional_title, profile"
+          )
+        );
+    }
+    if (
+      full_name.length > 100 ||
+      professional_title.length > 200 ||
+      profile.length > 5000
+    ) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
+    }
+
+    // 3. Check quota
     let quotaResult;
     try {
       quotaResult = await checkUserQuota(userId, "linkedin_profile_optimizer");
@@ -330,33 +353,6 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
           newErrorResponse(
             "Quota Exceeded",
             `Quota limit exceeded for profile optimizer. Current usage: ${quotaResult.count}/${limitText}. Try again in the next period.`
-          )
-        );
-    }
-
-    // 3. Validate input
-    const { full_name, professional_title, profile } = req.body as PromptReq;
-    if (!full_name || !professional_title || !profile) {
-      return res
-        .status(400)
-        .json(
-          newErrorResponse(
-            "Invalid Request",
-            "Missing required fields: full_name, professional_title, profile"
-          )
-        );
-    }
-    if (
-      full_name.length > 100 ||
-      professional_title.length > 200 ||
-      profile.length > 5000
-    ) {
-      return res
-        .status(400)
-        .json(
-          newErrorResponse(
-            "Validation Error",
-            "Input fields exceed allowed length."
           )
         );
     }
@@ -445,15 +441,12 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         );
     }
 
-    // 7. Update quota after success
-    try {
-      await updateUserQuota(userId, "linkedin_profile_optimizer");
-    } catch (err) {
-      // Log but do not fail the request
+    // 7. Update quota in background (fire and forget - don't block response)
+    updateUserQuota(userId, "linkedin_profile_optimizer").catch((err) => {
       console.warn("Warning: Failed to update quota for user", userId, err);
-    }
+    });
 
-    // 8. Return success
+    // 8. Return success immediately (quota update continues in background)
     return res
       .status(200)
       .json(
@@ -487,35 +480,7 @@ export async function generateProposal(req: Request, res: Response) {
         .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
-    // 2. Check quota
-    let quotaResult;
-    try {
-      quotaResult = await checkUserQuota(userId, "ai_proposals");
-    } catch (err: any) {
-      console.error("[generateProposal] Quota check error:", err);
-      return res
-        .status(500)
-        .json(
-          newErrorResponse(
-            "Internal Server Error",
-            "An error occurred. Please try again or contact support."
-          )
-        );
-    }
-    if (!quotaResult.allowed) {
-      const limitText =
-        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
-      return res
-        .status(429)
-        .json(
-          newErrorResponse(
-            "Quota Exceeded",
-            `Quota limit exceeded for AI proposals. Current usage: ${quotaResult.count}/${limitText}. Try again in the next period.`
-          )
-        );
-    }
-
-    // 3. Validate input
+    // 2. Validate input first (fast, no DB calls)
     const { client_name, job_title, proposal_tone, job_summary } =
       req.body as ProposalReq;
     if (!client_name || !job_title || !proposal_tone || !job_summary) {
@@ -554,9 +519,41 @@ export async function generateProposal(req: Request, res: Response) {
         );
     }
 
-    // 4. Get user profile data (displayName, portfolioLink, professionalTitle) in one DB call
-    const { displayName, portfolioLink, professionalTitle } =
-      await getUserProfileData(userId, req.userDisplayName);
+    // 3. Parallelize quota check and user profile data fetch (both are independent DB calls)
+    let quotaResult;
+    let profileData;
+    try {
+      [quotaResult, profileData] = await Promise.all([
+        checkUserQuota(userId, "ai_proposals"),
+        getUserProfileData(userId, req.userDisplayName),
+      ]);
+    } catch (err: any) {
+      console.error("[generateProposal] Quota check or profile fetch error:", err);
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "Internal Server Error",
+            "An error occurred. Please try again or contact support."
+          )
+        );
+    }
+
+    if (!quotaResult.allowed) {
+      const limitText =
+        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
+      return res
+        .status(429)
+        .json(
+          newErrorResponse(
+            "Quota Exceeded",
+            `Quota limit exceeded for AI proposals. Current usage: ${quotaResult.count}/${limitText}. Try again in the next period.`
+          )
+        );
+    }
+
+    // 4. Extract profile data
+    const { displayName, portfolioLink, professionalTitle } = profileData;
 
     // 5. Sanitize input (simple trim)
     const sanitizedClientName = client_name.trim();
@@ -723,38 +720,38 @@ export async function generateProposal(req: Request, res: Response) {
       portfolioLink || null
     );
 
-    // 7. Store proposal history and get the proposal ID
-    let proposalId: string | undefined;
-    try {
-      proposalId = await storeProposalHistory(
-        userId,
-        {
-          client_name: sanitizedClientName,
-          job_title: sanitizedJobTitle,
-          proposal_tone: proposal_tone,
-          job_summary: sanitizedJobSummary,
-        },
-        proposalResponse
-      );
-      // Add proposal ID to response
-      proposalResponse.proposalId = proposalId;
-    } catch (err) {
+    // 7. Store proposal history and update quota in parallel (non-blocking for response)
+    // Start both operations but don't wait for quota update
+    const storePromise = storeProposalHistory(
+      userId,
+      {
+        client_name: sanitizedClientName,
+        job_title: sanitizedJobTitle,
+        proposal_tone: proposal_tone,
+        job_summary: sanitizedJobSummary,
+      },
+      proposalResponse
+    ).catch((err) => {
       console.warn(
         "Warning: Failed to store proposal history for user",
         userId,
         err
       );
-    }
+      return undefined;
+    });
 
-    // 8. Update quota after success
-    try {
-      await updateUserQuota(userId, "ai_proposals");
-    } catch (err) {
-      // Log but do not fail the request
+    // Update quota in background (fire and forget - don't block response)
+    updateUserQuota(userId, "ai_proposals").catch((err) => {
       console.warn("Warning: Failed to update quota for user", userId, err);
+    });
+
+    // Wait for proposal storage to complete (needed for proposalId in response)
+    const proposalId = await storePromise;
+    if (proposalId) {
+      proposalResponse.proposalId = proposalId;
     }
 
-    // 9. Return success
+    // 8. Return success immediately (quota update continues in background)
     return res
       .status(200)
       .json(
