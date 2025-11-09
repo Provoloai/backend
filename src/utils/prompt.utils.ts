@@ -6,6 +6,98 @@ import type { ProposalHistory, ProposalResponse, ProposalReq, RefinementAction, 
 import { REFINEMENT_LABELS } from "../types/proposal.types.ts";
 import { closeFirebaseApp, getFirebaseApp } from "./getFirebaseApp.ts";
 
+/**
+ * Validates and normalizes a proposal response structure
+ * Ensures all required fields exist and keyPoints is an array
+ */
+export function validateProposalResponse(proposal: ProposalResponse): ProposalResponse {
+  // Ensure keyPoints is an array
+  if (!Array.isArray(proposal.keyPoints)) {
+    proposal.keyPoints = [];
+  }
+
+  // Ensure all required fields exist
+  const requiredFields = [
+    "hook",
+    "solution",
+    "availability",
+    "support",
+    "closing",
+  ];
+  for (const field of requiredFields) {
+    if (!proposal[field as keyof ProposalResponse]) {
+      (proposal as any)[field] = `[${field} not provided]`;
+    }
+  }
+
+  return proposal;
+}
+
+/**
+ * Creates MDX content from a proposal response
+ * Ensures the hook starts with "Hey [client name],"
+ * 
+ * @param proposal - The proposal response object
+ * @param clientName - The client's name to use in the greeting
+ * @param portfolioLink - Optional portfolio link to override the one in the proposal
+ * @returns The MDX formatted string
+ */
+export function createProposalMDX(
+  proposal: ProposalResponse,
+  clientName: string,
+  portfolioLink?: string | null
+): string {
+  // Validate and normalize the proposal
+  const validatedProposal = validateProposalResponse({ ...proposal });
+
+  // Override portfolioLink if provided
+  if (portfolioLink) {
+    validatedProposal.portfolioLink = portfolioLink;
+  }
+
+  // Ensure hook starts with "Hey [client name],"
+  const sanitizedClientName = clientName.trim();
+  let hookText = validatedProposal.hook.trim();
+  const escapedClientName = sanitizedClientName.replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+  const heyPattern = /^hey\s+/i;
+  if (!heyPattern.test(hookText)) {
+    hookText = `Hey ${sanitizedClientName}, ${hookText}`;
+  } else {
+    // If it starts with "Hey" but not the client name, replace it
+    const heyWithNamePattern = new RegExp(
+      `^hey\\s+${escapedClientName}\\s*,?\\s*`,
+      "i"
+    );
+    if (!heyWithNamePattern.test(hookText)) {
+      hookText = hookText.replace(/^hey\s+/i, `Hey ${sanitizedClientName}, `);
+    }
+  }
+
+  // Build MDX content
+  const mdxContent = `${hookText}
+
+${validatedProposal.solution}
+
+${validatedProposal.keyPoints.map((point: string) => `• ${point}`).join("\n")}
+
+${
+  validatedProposal.portfolioLink
+    ? `Portfolio: ${validatedProposal.portfolioLink}`
+    : ""
+}
+
+${validatedProposal.availability}
+
+${validatedProposal.support}
+
+${validatedProposal.closing}`;
+
+  return mdxContent.trim();
+}
+
 // Helper function to convert Firestore timestamp to Date
 function toDate(firestoreTimestamp: any): Date {
   if (!firestoreTimestamp) {
@@ -116,7 +208,7 @@ Tone & Style
 - Keep proposals concise and easy to skim
 
 Structure
-- Hook (1–2 sentences): Start with a line that immediately grabs the client's attention by showing understanding of their problem or goal
+- Hook (1–2 sentences): Start with "Hey [Client Name]," followed by a line that immediately grabs the client's attention by showing understanding of their problem or goal
 - Personal Touch: Reference something specific from the job post to make the proposal feel customized
 - Solution: Explain how you'll solve their problem or achieve their goal. Keep it benefit-driven
 - Bullets with Emojis: Highlight key services or advantages using short bullet points with emojis
@@ -133,7 +225,7 @@ Formatting
 IMPORTANT: You MUST return your response as a valid JSON object that matches this exact schema:
 
 {
-"hook": "string - 1-2 sentences that grab attention",
+"hook": "string - Start with 'Hey [Client Name],' followed by 1-2 sentences that grab attention",
 "solution": "string - explanation of how you'll solve their problem",
 "keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
 "portfolioLink": "string - portfolio URL if relevant",
@@ -168,7 +260,7 @@ You MUST respond with one of these two JSON formats ONLY:
 
 **SUCCESS FORMAT** (when content is valid proposal request):
 {
-  "hook": "string - 1-2 sentences that grab attention",
+  "hook": "string - Start with 'Hey [Client Name],' followed by 1-2 sentences that grab attention",
   "solution": "string - explanation of how you'll solve their problem",
   "keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
   "portfolioLink": "string - portfolio URL if relevant",
@@ -494,6 +586,20 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       return null;
     }
 
+    // Get user's portfolioLink
+    let portfolioLink: string | null = null;
+    try {
+      const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+      if (!userSnap.empty && userSnap.docs[0]) {
+        const userData = userSnap.docs[0].data();
+        portfolioLink = userData.portfolioLink || null;
+      }
+    } catch (err) {
+      console.error("[getProposalById] Error fetching user portfolioLink:", err);
+    }
+
+    const clientName = data.clientName || "";
+
     // Get all refinements if they exist
     let refinements: RefinementHistory[] = [];
     let versions: Array<{
@@ -515,14 +621,29 @@ export async function getProposalById(userId: string, proposalId: string): Promi
         .filter(doc => doc.exists)
         .map(doc => {
           const refinement = doc.data()!;
+          
+          // Ensure portfolioLink is included in both proposals
+          const originalProposal: ProposalResponse = {
+            ...refinement.originalProposal,
+            portfolioLink: portfolioLink || refinement.originalProposal.portfolioLink || "",
+          };
+          const refinedProposal: ProposalResponse = {
+            ...refinement.refinedProposal,
+            portfolioLink: portfolioLink || refinement.refinedProposal.portfolioLink || "",
+          };
+
+          // Generate MDX for both proposals
+          originalProposal.mdx = createProposalMDX(originalProposal, clientName, portfolioLink);
+          refinedProposal.mdx = createProposalMDX(refinedProposal, clientName, portfolioLink);
+
           return {
             id: doc.id,
             proposalId: refinement.proposalId,
             userId: refinement.userId,
             refinementType: refinement.refinementType,
             refinementLabel: refinement.refinementLabel,
-            originalProposal: refinement.originalProposal,
-            refinedProposal: refinement.refinedProposal,
+            originalProposal,
+            refinedProposal,
             createdAt: toDate(refinement.createdAt),
             order: refinement.order,
             version: refinement.version,
@@ -531,15 +652,19 @@ export async function getProposalById(userId: string, proposalId: string): Promi
 
       // Create versions array
       // Add original version (version 0)
+      const originalProposalResponse: ProposalResponse = {
+        ...data.proposalResponse,
+        portfolioLink: portfolioLink || data.proposalResponse.portfolioLink || "",
+        version: 0,
+        versionId: doc.id,
+        proposalId: doc.id,
+      };
+      originalProposalResponse.mdx = createProposalMDX(originalProposalResponse, clientName, portfolioLink);
+      
       versions.push({
         versionId: doc.id,
         version: 0,
-        proposal: {
-          ...data.proposalResponse,
-          version: 0,
-          versionId: doc.id,
-          proposalId: doc.id,
-        },
+        proposal: originalProposalResponse,
         createdAt: toDate(data.createdAt),
       });
 
@@ -550,12 +675,7 @@ export async function getProposalById(userId: string, proposalId: string): Promi
           version: refinement.version,
           refinementLabel: refinement.refinementLabel,
           refinementType: refinement.refinementType,
-          proposal: {
-            ...refinement.refinedProposal,
-            version: refinement.version,
-            versionId: refinement.id,
-            proposalId,
-          },
+          proposal: refinement.refinedProposal,
           createdAt: refinement.createdAt,
         });
       });
@@ -564,6 +684,13 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       versions.sort((a, b) => a.version - b.version);
     }
 
+    // Ensure main proposalResponse has portfolioLink and MDX
+    const mainProposalResponse: ProposalResponse = {
+      ...data.proposalResponse,
+      portfolioLink: portfolioLink || data.proposalResponse.portfolioLink || "",
+    };
+    mainProposalResponse.mdx = createProposalMDX(mainProposalResponse, clientName, portfolioLink);
+
     return {
       id: doc.id,
       userId: data.userId,
@@ -571,7 +698,7 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       jobTitle: data.jobTitle,
       proposalTone: data.proposalTone,
       jobSummary: data.jobSummary,
-      proposalResponse: data.proposalResponse,
+      proposalResponse: mainProposalResponse,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
       refinementCount: data.refinementCount || 0,

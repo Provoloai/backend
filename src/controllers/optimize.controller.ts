@@ -14,10 +14,16 @@ import {
   getLatestProposalVersion,
   storeRefinement,
   getProposalVersions,
+  createProposalMDX,
+  validateProposalResponse,
 } from "../utils/prompt.utils.ts";
 import { updateUserQuota, checkUserQuota } from "../utils/quota.utils.ts";
+import type { FeatureSlug } from "../types/tiers.ts";
 import { callGemini } from "../utils/geminiClient.ts";
-import { SystemOverrideError, ValidationError } from "../utils/responseValidator.ts";
+import {
+  SystemOverrideError,
+  ValidationError,
+} from "../utils/responseValidator.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
 import type {
   ProposalReq,
@@ -44,8 +50,12 @@ async function getUserProfileData(
     try {
       const app = getFirebaseApp();
       const db = getFirestore(app);
-      const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
-      
+      const userSnap = await db
+        .collection("users")
+        .where("userId", "==", userId)
+        .limit(1)
+        .get();
+
       if (!userSnap.empty && userSnap.docs[0]) {
         const userData = userSnap.docs[0].data();
         return {
@@ -55,7 +65,10 @@ async function getUserProfileData(
         };
       }
     } catch (err) {
-      console.error("[getUserProfileData] Error fetching user profile data:", err);
+      console.error(
+        "[getUserProfileData] Error fetching user profile data:",
+        err
+      );
     }
     return {
       displayName: tokenDisplayName,
@@ -63,13 +76,17 @@ async function getUserProfileData(
       professionalTitle: null,
     };
   }
-  
+
   // Fetch all data from database if displayName not in token
   try {
     const app = getFirebaseApp();
     const db = getFirestore(app);
-    const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
-    
+    const userSnap = await db
+      .collection("users")
+      .where("userId", "==", userId)
+      .limit(1)
+      .get();
+
     if (!userSnap.empty && userSnap.docs[0]) {
       const userData = userSnap.docs[0].data();
       return {
@@ -79,9 +96,12 @@ async function getUserProfileData(
       };
     }
   } catch (err) {
-    console.error("[getUserProfileData] Error fetching user profile data:", err);
+    console.error(
+      "[getUserProfileData] Error fetching user profile data:",
+      err
+    );
   }
-  
+
   return {
     displayName: undefined,
     portfolioLink: null,
@@ -175,15 +195,19 @@ export async function optimizeProfile(req: Request, res: Response) {
       aiResponseText = await callGemini(content, optimizerSystemInstruction());
     } catch (err: any) {
       console.error("[optimizeProfile] AI service call failed:", err);
-      
+
       // If system override detected, deduct quota and return specific error
       if (err instanceof SystemOverrideError) {
         try {
           await updateUserQuota(userId, "upwork_profile_optimizer");
         } catch (quotaErr) {
-          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+          console.warn(
+            "Warning: Failed to update quota after system override error for user",
+            userId,
+            quotaErr
+          );
         }
-        
+
         return res
           .status(400)
           .json(
@@ -193,7 +217,7 @@ export async function optimizeProfile(req: Request, res: Response) {
             )
           );
       }
-      
+
       // If validation error (400-level), return 400 status
       if (err instanceof ValidationError) {
         return res
@@ -201,11 +225,12 @@ export async function optimizeProfile(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
-      
+
       return res
         .status(500)
         .json(
@@ -353,15 +378,19 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
       );
     } catch (err: any) {
       console.error("[optimizeLinkedIn] AI service call failed:", err);
-      
+
       // If system override detected, deduct quota and return specific error
       if (err instanceof SystemOverrideError) {
         try {
           await updateUserQuota(userId, "linkedin_profile_optimizer");
         } catch (quotaErr) {
-          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+          console.warn(
+            "Warning: Failed to update quota after system override error for user",
+            userId,
+            quotaErr
+          );
         }
-        
+
         return res
           .status(400)
           .json(
@@ -371,7 +400,7 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
             )
           );
       }
-      
+
       // If validation error (400-level), return 400 status
       if (err instanceof ValidationError) {
         return res
@@ -379,11 +408,12 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
-      
+
       return res
         .status(500)
         .json(
@@ -525,7 +555,8 @@ export async function generateProposal(req: Request, res: Response) {
     }
 
     // 4. Get user profile data (displayName, portfolioLink, professionalTitle) in one DB call
-    const { displayName, portfolioLink, professionalTitle } = await getUserProfileData(userId, req.userDisplayName);
+    const { displayName, portfolioLink, professionalTitle } =
+      await getUserProfileData(userId, req.userDisplayName);
 
     // 5. Sanitize input (simple trim)
     const sanitizedClientName = client_name.trim();
@@ -533,7 +564,9 @@ export async function generateProposal(req: Request, res: Response) {
     const sanitizedJobSummary = job_summary.trim();
 
     // Use professional title from profile if available (for context, though job_title is the job being applied for)
-    const inputContent = `Client Name: ${sanitizedClientName}\nJob Title: ${sanitizedJobTitle}${professionalTitle ? `\nYour Professional Title: ${professionalTitle}` : ""}\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
+    const inputContent = `Client Name: ${sanitizedClientName}\nJob Title: ${sanitizedJobTitle}${
+      professionalTitle ? `\nYour Professional Title: ${professionalTitle}` : ""
+    }\nProposal Tone: ${proposal_tone}\n\nJob Summary:\n${sanitizedJobSummary}`;
     const content = proposalPrompt(inputContent, displayName);
 
     // 5. Call AI model
@@ -542,15 +575,19 @@ export async function generateProposal(req: Request, res: Response) {
       aiResponseText = await callGemini(content, proposalSystemInstruction());
     } catch (err: any) {
       console.error("[generateProposal] AI service call failed:", err);
-      
+
       // If system override detected, deduct quota and return specific error
       if (err instanceof SystemOverrideError) {
         try {
           await updateUserQuota(userId, "ai_proposals");
         } catch (quotaErr) {
-          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+          console.warn(
+            "Warning: Failed to update quota after system override error for user",
+            userId,
+            quotaErr
+          );
         }
-        
+
         return res
           .status(400)
           .json(
@@ -560,7 +597,7 @@ export async function generateProposal(req: Request, res: Response) {
             )
           );
       }
-      
+
       // If validation error (400-level), return 400 status
       if (err instanceof ValidationError) {
         return res
@@ -568,11 +605,12 @@ export async function generateProposal(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
-      
+
       return res
         .status(500)
         .json(
@@ -668,50 +706,13 @@ export async function generateProposal(req: Request, res: Response) {
         );
     }
 
-    // Ensure keyPoints is an array
-    if (!Array.isArray(proposalResponse.keyPoints)) {
-      proposalResponse.keyPoints = [];
-    }
-
-    // Ensure all required fields exist
-    const requiredFields = [
-      "hook",
-      "solution",
-      "availability",
-      "support",
-      "closing",
-    ];
-    for (const field of requiredFields) {
-      if (!proposalResponse[field as keyof ProposalResponse]) {
-        (proposalResponse as any)[field] = `[${field} not provided]`;
-      }
-    }
-
-    // Always use portfolioLink from user profile if available, overriding AI response
-    if (portfolioLink) {
-      proposalResponse.portfolioLink = portfolioLink;
-    }
-
-    // 6.5. Combine components into MDX
-    const mdxContent = `${proposalResponse.hook}
-
-${proposalResponse.solution}
-
-${proposalResponse.keyPoints.map((point: string) => `• ${point}`).join("\n")}
-
-${
-  proposalResponse.portfolioLink
-    ? `Portfolio: ${proposalResponse.portfolioLink}`
-    : ""
-}
-
-${proposalResponse.availability}
-
-${proposalResponse.support}
-
-${proposalResponse.closing}`;
-
-    proposalResponse.mdx = mdxContent.trim();
+    // 6.5. Validate and create MDX content
+    validateProposalResponse(proposalResponse);
+    proposalResponse.mdx = createProposalMDX(
+      proposalResponse,
+      sanitizedClientName,
+      portfolioLink || null
+    );
 
     // 7. Store proposal history and get the proposal ID
     let proposalId: string | undefined;
@@ -797,7 +798,12 @@ export async function getProposalHistory(req: Request, res: Response) {
     }
 
     // 4. Get proposal history with optional search
-    const result = await getUserProposalHistory(userId, pageNum, limitNum, search);
+    const result = await getUserProposalHistory(
+      userId,
+      pageNum,
+      limitNum,
+      search
+    );
 
     // 5. Return success
     return res.status(200).json(
@@ -891,44 +897,63 @@ export async function refineProposal(req: Request, res: Response) {
     }
 
     // 2. Validate input
-    const { proposalId, refinementType, newTone } = req.body as RefineProposalReq;
-    
+    const { proposalId, refinementType, newTone } =
+      req.body as RefineProposalReq;
+
     if (!proposalId || !refinementType) {
-      return res.status(400).json(
-        newErrorResponse("Invalid Request", "Missing proposalId or refinementType")
-      );
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Missing proposalId or refinementType"
+          )
+        );
     }
 
     const validRefinementTypes: RefinementAction[] = [
-      "expand_text", "trim_text", "simplify_text", "improve_flow", "change_tone"
+      "expand_text",
+      "trim_text",
+      "simplify_text",
+      "improve_flow",
+      "change_tone",
     ];
-    
+
     if (!validRefinementTypes.includes(refinementType)) {
-      return res.status(400).json(
-        newErrorResponse("Invalid Request", "Invalid refinement type")
-      );
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Invalid refinement type"));
     }
 
     // Change tone requires newTone
     if (refinementType === "change_tone" && !newTone) {
-      return res.status(400).json(
-        newErrorResponse("Invalid Request", "newTone required for change_tone refinement")
-      );
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "newTone required for change_tone refinement"
+          )
+        );
     }
 
     // 3. Get proposal details
     const proposal = await getProposalById(userId, proposalId);
     if (!proposal) {
-      return res.status(404).json(
-        newErrorResponse("Not Found", "Proposal not found")
-      );
+      return res
+        .status(404)
+        .json(newErrorResponse("Not Found", "Proposal not found"));
     }
 
     // 4. Get latest version (could be refined already)
-    const { proposal: currentProposal, refinementOrder } = await getLatestProposalVersion(proposalId, userId);
+    const { proposal: currentProposal, refinementOrder } =
+      await getLatestProposalVersion(proposalId, userId);
 
-    // 4a. Get user display name
-    const { displayName } = await getUserProfileData(userId, req.userDisplayName);
+    // 4a. Get user profile data (displayName, portfolioLink)
+    const { displayName, portfolioLink } = await getUserProfileData(
+      userId,
+      req.userDisplayName
+    );
 
     // 5. Call AI for refinement
     const prompt = refineProposalPrompt(
@@ -942,18 +967,25 @@ export async function refineProposal(req: Request, res: Response) {
 
     let aiResponseText = "";
     try {
-      aiResponseText = await callGemini(prompt, refineProposalSystemInstruction());
+      aiResponseText = await callGemini(
+        prompt,
+        refineProposalSystemInstruction()
+      );
     } catch (err: any) {
       console.error("[refineProposal] AI call failed:", err);
-      
+
       // If system override detected, deduct quota and return specific error
       if (err instanceof SystemOverrideError) {
         try {
           await updateUserQuota(userId, "ai_proposals");
         } catch (quotaErr) {
-          console.warn("Warning: Failed to update quota after system override error for user", userId, quotaErr);
+          console.warn(
+            "Warning: Failed to update quota after system override error for user",
+            userId,
+            quotaErr
+          );
         }
-        
+
         return res
           .status(400)
           .json(
@@ -963,7 +995,7 @@ export async function refineProposal(req: Request, res: Response) {
             )
           );
       }
-      
+
       // If validation error (400-level), return 400 status
       if (err instanceof ValidationError) {
         return res
@@ -971,14 +1003,20 @@ export async function refineProposal(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
-      
-      return res.status(500).json(
-        newErrorResponse("AI Service Error", "Failed to refine proposal. Please try again.")
-      );
+
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "AI Service Error",
+            "Failed to refine proposal. Please try again."
+          )
+        );
     }
 
     // 6. Parse AI response
@@ -987,10 +1025,24 @@ export async function refineProposal(req: Request, res: Response) {
       refinedProposal = JSON.parse(aiResponseText) as ProposalResponse;
     } catch (err) {
       console.error("[refineProposal] JSON parse failed:", err);
-      return res.status(500).json(
-        newErrorResponse("Processing Error", "Failed to process refined proposal.")
-      );
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "Processing Error",
+            "Failed to process refined proposal."
+          )
+        );
     }
+
+    // 6.5. Validate and create MDX content
+    const sanitizedClientName = proposal.clientName.trim();
+    validateProposalResponse(refinedProposal);
+    refinedProposal.mdx = createProposalMDX(
+      refinedProposal,
+      sanitizedClientName,
+      portfolioLink || null
+    );
 
     // 7. Store refinement
     await storeRefinement(
@@ -1003,23 +1055,33 @@ export async function refineProposal(req: Request, res: Response) {
     );
 
     // 8. Return success
-    return res.status(200).json(
-      newSuccessResponse(
-        "Proposal Refined",
-        "Proposal refined successfully",
-        refinedProposal
-      )
-    );
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Proposal Refined",
+          "Proposal refined successfully",
+          refinedProposal
+        )
+      );
   } catch (err) {
     console.error("[refineProposal] Error:", err);
-    return res.status(500).json(
-      newErrorResponse("Internal Server Error", "An error occurred while refining the proposal.")
-    );
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "An error occurred while refining the proposal."
+        )
+      );
   }
 }
 
 // Get all versions of a proposal
-export async function getProposalVersionsController(req: Request, res: Response) {
+export async function getProposalVersionsController(
+  req: Request,
+  res: Response
+) {
   try {
     const userId = req.userID as string;
     if (!userId) {
@@ -1030,25 +1092,32 @@ export async function getProposalVersionsController(req: Request, res: Response)
 
     const { proposalId } = req.params;
     if (!proposalId) {
-      return res.status(400).json(
-        newErrorResponse("Invalid Request", "Proposal ID is required")
-      );
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Proposal ID is required"));
     }
 
     const versions = await getProposalVersions(proposalId, userId);
 
-    return res.status(200).json(
-      newSuccessResponse(
-        "Versions Retrieved",
-        "Proposal versions retrieved successfully",
-        { versions }
-      )
-    );
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Versions Retrieved",
+          "Proposal versions retrieved successfully",
+          { versions }
+        )
+      );
   } catch (err) {
     console.error("[getProposalVersionsController] Error:", err);
-    return res.status(500).json(
-      newErrorResponse("Internal Server Error", "An error occurred while retrieving proposal versions.")
-    );
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "An error occurred while retrieving proposal versions."
+        )
+      );
   }
 }
 
@@ -1062,7 +1131,9 @@ export async function cleanupOldProposalHistory(req: Request, res: Response) {
     if (secret) {
       const provided = req.headers["x-cron-secret"] as string | undefined;
       if (!provided || provided !== secret) {
-        return res.status(401).json(newErrorResponse("Unauthorized", "Invalid cron secret"));
+        return res
+          .status(401)
+          .json(newErrorResponse("Unauthorized", "Invalid cron secret"));
       }
     }
 
@@ -1103,5 +1174,97 @@ export async function cleanupOldProposalHistory(req: Request, res: Response) {
     return res
       .status(500)
       .json(newErrorResponse("Internal Server Error", "Cleanup failed"));
+  }
+}
+
+// Get user quota information for a specific feature
+export async function getUserQuota(req: Request, res: Response) {
+  try {
+    // 1. Get user ID from auth middleware
+    const userId = req.userID as string;
+    if (!userId) {
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
+    }
+
+    // 2. Get quota slug from query parameter
+    const quota = req.query.quota as string;
+    if (!quota) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Missing required query parameter: quota"
+          )
+        );
+    }
+
+    // 3. Validate quota slug
+    const validQuotaSlugs: FeatureSlug[] = [
+      "upwork_profile_optimizer",
+      "linkedin_profile_optimizer",
+      "ai_proposals",
+      "resume_generator",
+      "advanced_ai_insights",
+      "comunity_access",
+      "newsletters",
+      "freelancer_growth_tools",
+    ];
+
+    if (!validQuotaSlugs.includes(quota as FeatureSlug)) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            `Invalid quota slug. Must be one of: ${validQuotaSlugs.join(", ")}`
+          )
+        );
+    }
+
+    // 4. Get quota information
+    let quotaResult;
+    try {
+      quotaResult = await checkUserQuota(userId, quota as FeatureSlug);
+    } catch (err: any) {
+      console.error("[getUserQuota] Quota check error:", err);
+      return res
+        .status(500)
+        .json(
+          newErrorResponse(
+            "Internal Server Error",
+            "An error occurred while checking quota. Please try again or contact support."
+          )
+        );
+    }
+
+    // 5. Return quota information
+    return res.status(200).json(
+      newSuccessResponse(
+        "Quota Retrieved",
+        "User quota information retrieved successfully",
+        {
+          quota: quota,
+          count: quotaResult.count,
+          limit: quotaResult.limit,
+          remaining:
+            quotaResult.limit === -1
+              ? -1
+              : Math.max(0, quotaResult.limit - quotaResult.count),
+        }
+      )
+    );
+  } catch (err) {
+    console.error("[getUserQuota] Unhandled error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "An error occurred. Please try again or contact support."
+        )
+      );
   }
 }

@@ -10,6 +10,7 @@ import {
   refineProposal,
   getProposalVersionsController,
   cleanupOldProposalHistory,
+  getUserQuota,
 } from "../controllers/optimize.controller.ts";
 
 const aiRouter: ExpressRouter = Router();
@@ -607,5 +608,73 @@ aiRouter.get("/proposal-versions/:proposalId", authMiddleware, emailVerification
  *         description: Internal server error
  */
 aiRouter.get("/cron/cleanup-proposal-history-30d", cleanupOldProposalHistory);
+
+/**
+ * @swagger
+ * /api/v1/ai/quota:
+ *   get:
+ *     summary: Get user quota information for a specific feature
+ *     description: Retrieves the current quota usage, limit, and remaining quota for a specific feature
+ *     tags:
+ *       - AI
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: quota
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum:
+ *             - upwork_profile_optimizer
+ *             - linkedin_profile_optimizer
+ *             - ai_proposals
+ *             - resume_generator
+ *             - advanced_ai_insights
+ *             - comunity_access
+ *             - newsletters
+ *             - freelancer_growth_tools
+ *         description: The quota slug for the feature to check
+ *         example: ai_proposals
+ *     responses:
+ *       200:
+ *         description: Quota information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Quota Retrieved"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     quota:
+ *                       type: string
+ *                       example: "ai_proposals"
+ *                     count:
+ *                       type: number
+ *                       description: Current usage count
+ *                       example: 5
+ *                     limit:
+ *                       type: string | number
+ *                       description: Maximum quota limit (or "unlimited")
+ *                       example: 10
+ *                     remaining:
+ *                       type: string | number
+ *                       description: Remaining quota (or "unlimited")
+ *                       example: 5
+ *       400:
+ *         description: Invalid request - missing or invalid quota parameter
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
+ */
+aiRouter.get("/quota", authMiddleware, emailVerificationMiddleware, getUserQuota);
 
 export default aiRouter;
