@@ -1,8 +1,17 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import type { Tier } from "../types/tiers.ts";
-import type { PromptLimitResult, UserPromptLimit } from "../types/prompt.types.ts";
+import type {
+  PromptLimitResult,
+  UserPromptLimit,
+} from "../types/prompt.types.ts";
 import type { QuotaHistory } from "../types/quotas.ts";
-import type { ProposalHistory, ProposalResponse, ProposalReq, RefinementAction, RefinementHistory } from "../types/proposal.types.ts";
+import type {
+  ProposalHistory,
+  ProposalResponse,
+  ProposalReq,
+  RefinementAction,
+  RefinementHistory,
+} from "../types/proposal.types.ts";
 import { REFINEMENT_LABELS } from "../types/proposal.types.ts";
 import { closeFirebaseApp, getFirebaseApp } from "./getFirebaseApp.ts";
 
@@ -10,7 +19,9 @@ import { closeFirebaseApp, getFirebaseApp } from "./getFirebaseApp.ts";
  * Validates and normalizes a proposal response structure
  * Ensures all required fields exist and keyPoints is an array
  */
-export function validateProposalResponse(proposal: ProposalResponse): ProposalResponse {
+export function validateProposalResponse(
+  proposal: ProposalResponse
+): ProposalResponse {
   // Ensure keyPoints is an array
   if (!Array.isArray(proposal.keyPoints)) {
     proposal.keyPoints = [];
@@ -35,8 +46,9 @@ export function validateProposalResponse(proposal: ProposalResponse): ProposalRe
 
 /**
  * Creates MDX content from a proposal response
- * Ensures the hook starts with "Hey [client name],"
- * 
+ * Adds "Hey [client name]," as a separate line at the beginning (like "Best regards" at the end)
+ * Removes "Hey [client name]," from the hook if it exists
+ *
  * @param proposal - The proposal response object
  * @param clientName - The client's name to use in the greeting
  * @param portfolioLink - Optional portfolio link to override the one in the proposal
@@ -58,29 +70,33 @@ export function createProposalMDX(
     validatedProposal.portfolioLink = "";
   }
 
-  // Ensure hook starts with "Hey [client name],"
+  // Remove "Hey [client name]," from the hook if it exists
   const sanitizedClientName = clientName.trim();
   let hookText = validatedProposal.hook.trim();
   const escapedClientName = sanitizedClientName.replace(
     /[.*+?^${}()|[\]\\]/g,
     "\\$&"
   );
-  const heyPattern = /^hey\s+/i;
-  if (!heyPattern.test(hookText)) {
-    hookText = `Hey ${sanitizedClientName}, ${hookText}`;
+
+  // Remove "Hey [client name]," from the beginning of the hook
+  const heyWithNamePattern = new RegExp(
+    `^hey\\s+${escapedClientName}\\s*,?\\s*`,
+    "i"
+  );
+  if (heyWithNamePattern.test(hookText)) {
+    hookText = hookText.replace(heyWithNamePattern, "").trim();
   } else {
-    // If it starts with "Hey" but not the client name, replace it
-    const heyWithNamePattern = new RegExp(
-      `^hey\\s+${escapedClientName}\\s*,?\\s*`,
-      "i"
-    );
-    if (!heyWithNamePattern.test(hookText)) {
-      hookText = hookText.replace(/^hey\s+/i, `Hey ${sanitizedClientName}, `);
+    // Also check for just "Hey" at the start (in case name doesn't match exactly)
+    const heyPattern = /^hey\s+[^,]*,\s*/i;
+    if (heyPattern.test(hookText)) {
+      hookText = hookText.replace(heyPattern, "").trim();
     }
   }
 
-  // Build MDX content
-  const mdxContent = `${hookText}
+  // Build MDX content with "Hey [client name]," as a separate line at the beginning
+  const mdxContent = `Hey ${sanitizedClientName},
+
+${hookText}
 
 ${validatedProposal.solution}
 
@@ -112,11 +128,17 @@ function toDate(firestoreTimestamp: any): Date {
   if (firestoreTimestamp instanceof Timestamp) {
     return firestoreTimestamp.toDate();
   }
-  if (typeof firestoreTimestamp === 'string' || typeof firestoreTimestamp === 'number') {
+  if (
+    typeof firestoreTimestamp === "string" ||
+    typeof firestoreTimestamp === "number"
+  ) {
     return new Date(firestoreTimestamp);
   }
   // Fallback for Firestore Timestamp-like objects
-  if (firestoreTimestamp.toDate && typeof firestoreTimestamp.toDate === 'function') {
+  if (
+    firestoreTimestamp.toDate &&
+    typeof firestoreTimestamp.toDate === "function"
+  ) {
     return firestoreTimestamp.toDate();
   }
   // Last resort: try to create a Date
@@ -124,12 +146,18 @@ function toDate(firestoreTimestamp: any): Date {
 }
 
 // Check optimizer quota for the user's current tier and usage
-export async function checkOptimizerQuotaForUser(userId: string): Promise<PromptLimitResult> {
+export async function checkOptimizerQuotaForUser(
+  userId: string
+): Promise<PromptLimitResult> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
     // 1. Get user doc
-    const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+    const userSnap = await db
+      .collection("users")
+      .where("userId", "==", userId)
+      .limit(1)
+      .get();
 
     if (userSnap.empty || !userSnap.docs[0])
       throw new Error(
@@ -137,13 +165,18 @@ export async function checkOptimizerQuotaForUser(userId: string): Promise<Prompt
       );
     const user = userSnap.docs[0].data() as { tierId?: string };
     const tierId = user.tierId || process.env.DEFAULT_TIER_ID;
-    if (!tierId) throw new Error("Tier ID not found. Please contact support, an error occurred.");
+    if (!tierId)
+      throw new Error(
+        "Tier ID not found. Please contact support, an error occurred."
+      );
 
     // 2. Get tier doc
     const tierSnap = await db.collection("tiers").doc(tierId).get();
     if (!tierSnap.exists) throw new Error("Tier not found");
     const tier = tierSnap.data() as Tier;
-    const feature = tier.features.find((f) => f.slug === "upwork_profile_optimizer");
+    const feature = tier.features.find(
+      (f) => f.slug === "upwork_profile_optimizer"
+    );
     if (!feature) throw new Error("Optimizer feature not found in tier");
 
     // 3. If unlimited, always allow
@@ -157,7 +190,9 @@ export async function checkOptimizerQuotaForUser(userId: string): Promise<Prompt
     if (quotaSnap.exists) {
       const quota = quotaSnap.data() as QuotaHistory;
       //   TODO: make the feature slug a constant somewhere
-      const quotaFeature = quota.features.find((f) => f.slug === "upwork_profile_optimizer");
+      const quotaFeature = quota.features.find(
+        (f) => f.slug === "upwork_profile_optimizer"
+      );
       if (quotaFeature) {
         // Reset if new interval
         const now = new Date();
@@ -193,12 +228,16 @@ export function linkedinOptimizerSystemInstruction(): string {
 }
 
 // Check if user has reached daily prompt limit (does not increment)
-export function proposalPrompt(inputContent: string, displayName?: string, portfolioLink?: string | null): string {
-  const closingInstruction = displayName 
+export function proposalPrompt(
+  inputContent: string,
+  displayName?: string,
+  portfolioLink?: string | null
+): string {
+  const closingInstruction = displayName
     ? `- Closing: End by inviting the client to chat or move forward. Insert a blank line before the professional closing (e.g., "Best regards", "Looking forward to working with you", "Thank you for considering my proposal"). Then put the freelancer's name on the next line: ${displayName}`
     : `- Closing Call-to-Action: End by inviting the client to chat or move forward`;
 
-  const closingSchemaDesc = displayName 
+  const closingSchemaDesc = displayName
     ? `string - call-to-action to chat or move forward. Insert a blank line before the professional closing (e.g., "Best regards", "Looking forward to working with you"). Then the freelancer's name on the next line: ${displayName}`
     : `string - call-to-action to chat or move forward`;
 
@@ -219,7 +258,7 @@ Tone & Style
 - Keep proposals concise and easy to skim
 
 Structure
-- Hook (1–2 sentences): Start with "Hey [Client Name]," followed by a line that immediately grabs the client's attention by showing understanding of their problem or goal
+- Hook (1–2 sentences): Immediately grab the client's attention by showing understanding of their problem or goal. DO NOT include "Hey [Client Name]," in the hook - it will be added separately in the final format
 - Personal Touch: Reference something specific from the job post to make the proposal feel customized
 - Solution: Explain how you'll solve their problem or achieve their goal. Keep it benefit-driven
 - Bullets with Emojis: Highlight key services or advantages using short bullet points with emojis
@@ -236,7 +275,7 @@ Formatting
 IMPORTANT: You MUST return your response as a valid JSON object that matches this exact schema:
 
 {
-"hook": "string - Start with 'Hey [Client Name],' followed by 1-2 sentences that grab attention",
+"hook": "string - 1-2 sentences that grab attention (DO NOT include 'Hey [Client Name],' - it will be added separately)",
 "solution": "string - explanation of how you'll solve their problem",
 "keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
 "portfolioLink": "${portfolioSchemaDesc}",
@@ -272,7 +311,7 @@ You MUST respond with one of these two JSON formats ONLY:
 
 **SUCCESS FORMAT** (when content is valid proposal request):
 {
-  "hook": "string - Start with 'Hey [Client Name],' followed by 1-2 sentences that grab attention",
+  "hook": "string - 1-2 sentences that grab attention (DO NOT include 'Hey [Client Name],' - it will be added separately)",
   "solution": "string - explanation of how you'll solve their problem",
   "keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
   "portfolioLink": "string - portfolio URL if provided, otherwise MUST be empty string \"\". DO NOT generate or create portfolio links if none is provided.",
@@ -337,14 +376,20 @@ export function isSameDay(t1: Date, t2: Date): boolean {
   );
 }
 
-export async function checkUserPromptLimit(userId: string, limit = 2): Promise<PromptLimitResult> {
+export async function checkUserPromptLimit(
+  userId: string,
+  limit = 2
+): Promise<PromptLimitResult> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
     if (limit <= 0) limit = 2;
     const now = new Date();
     const result: PromptLimitResult = { allowed: false, count: 0, limit };
-    const querySnap = await db.collection("user_prompt_limits").where("userId", "==", userId).get();
+    const querySnap = await db
+      .collection("user_prompt_limits")
+      .where("userId", "==", userId)
+      .get();
     if (querySnap.empty) {
       result.allowed = true;
       result.count = 0;
@@ -356,7 +401,9 @@ export async function checkUserPromptLimit(userId: string, limit = 2): Promise<P
     }
     const data = doc.data() as UserPromptLimit;
     const lastPromptAt =
-      data.lastPromptAt instanceof Date ? data.lastPromptAt : new Date(data.lastPromptAt);
+      data.lastPromptAt instanceof Date
+        ? data.lastPromptAt
+        : new Date(data.lastPromptAt);
     if (isSameDay(lastPromptAt, now)) {
       if (data.promptCount >= limit) {
         result.count = data.promptCount;
@@ -381,7 +428,10 @@ export async function updateUserPromptLimit(userId: string): Promise<void> {
   const db = getFirestore(app);
   try {
     const now = new Date();
-    const querySnap = await db.collection("user_prompt_limits").where("userId", "==", userId).get();
+    const querySnap = await db
+      .collection("user_prompt_limits")
+      .where("userId", "==", userId)
+      .get();
     if (querySnap.empty) {
       await db.collection("user_prompt_limits").add({
         userId,
@@ -396,7 +446,9 @@ export async function updateUserPromptLimit(userId: string): Promise<void> {
     }
     const data = doc.data() as UserPromptLimit;
     const lastPromptAt =
-      data.lastPromptAt instanceof Date ? data.lastPromptAt : new Date(data.lastPromptAt);
+      data.lastPromptAt instanceof Date
+        ? data.lastPromptAt
+        : new Date(data.lastPromptAt);
     if (isSameDay(lastPromptAt, now)) {
       await doc.ref.update({
         promptCount: data.promptCount + 1,
@@ -451,30 +503,32 @@ export async function storeProposalHistory(
     let createdId: string | undefined;
     try {
       createdId = await db.runTransaction(async (tx) => {
-        
-      const recentQ = col
-        .where("userId", "==", userId)
-        .orderBy("createdAt", "desc")
-        .limit(cap);
-      const recentSnap = await tx.get(recentQ);
-
-      if (recentSnap.size >= cap) {
-        const deleteCount = recentSnap.size - cap + 1;
-        const oldestQ = col
+        const recentQ = col
           .where("userId", "==", userId)
-          .orderBy("createdAt", "asc")
-          .limit(deleteCount);
-        const oldestSnap = await tx.get(oldestQ);
-        for (const d of oldestSnap.docs) {
-          tx.delete(d.ref);
-        }
-      }
+          .orderBy("createdAt", "desc")
+          .limit(cap);
+        const recentSnap = await tx.get(recentQ);
 
-      tx.set(preCreatedRef, proposalHistory);
-      return preCreatedRef.id;
+        if (recentSnap.size >= cap) {
+          const deleteCount = recentSnap.size - cap + 1;
+          const oldestQ = col
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "asc")
+            .limit(deleteCount);
+          const oldestSnap = await tx.get(oldestQ);
+          for (const d of oldestSnap.docs) {
+            tx.delete(d.ref);
+          }
+        }
+
+        tx.set(preCreatedRef, proposalHistory);
+        return preCreatedRef.id;
       });
     } catch (err) {
-      console.error("storeProposalHistory transaction failed; falling back to direct write", err);
+      console.error(
+        "storeProposalHistory transaction failed; falling back to direct write",
+        err
+      );
       await preCreatedRef.set(proposalHistory);
       createdId = preCreatedRef.id;
     }
@@ -503,7 +557,10 @@ export async function storeProposalHistory(
             if (overflowSnap.size < 200) break;
           }
         } catch (cleanupErr) {
-          console.warn("Overflow cleanup skipped due to error (likely missing index)", cleanupErr);
+          console.warn(
+            "Overflow cleanup skipped due to error (likely missing index)",
+            cleanupErr
+          );
         }
       })().catch((err) => {
         console.warn("Background overflow cleanup error:", err);
@@ -527,11 +584,13 @@ export async function getUserProposalHistory(
   const db = getFirestore(app);
   try {
     const offset = (page - 1) * limit;
-    
+
     // Get all user's proposals first for filtering if search is provided
-    const baseQuery = db.collection("proposal_history").where("userId", "==", userId);
+    const baseQuery = db
+      .collection("proposal_history")
+      .where("userId", "==", userId);
     const allSnapshot = await baseQuery.get();
-    
+
     // Filter by search term if provided
     let filteredProposals: ProposalHistory[] = [];
     allSnapshot.forEach((doc) => {
@@ -550,30 +609,38 @@ export async function getUserProposalHistory(
         latestRefinementId: data.latestRefinementId,
         allRefinementIds: data.allRefinementIds || [],
       };
-      
+
       // Apply search filter if search term is provided
       if (!search) {
         filteredProposals.push(proposal);
       } else {
         const searchLower = search.toLowerCase();
-        const matchesJobTitle = proposal.jobTitle?.toLowerCase().includes(searchLower);
-        const matchesClientName = proposal.clientName?.toLowerCase().includes(searchLower);
-        const matchesJobSummary = proposal.jobSummary?.toLowerCase().includes(searchLower);
-        
+        const matchesJobTitle = proposal.jobTitle
+          ?.toLowerCase()
+          .includes(searchLower);
+        const matchesClientName = proposal.clientName
+          ?.toLowerCase()
+          .includes(searchLower);
+        const matchesJobSummary = proposal.jobSummary
+          ?.toLowerCase()
+          .includes(searchLower);
+
         if (matchesJobTitle || matchesClientName || matchesJobSummary) {
           filteredProposals.push(proposal);
         }
       }
     });
-    
+
     // Sort by createdAt descending
-    filteredProposals.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    
+    filteredProposals.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
+
     const total = filteredProposals.length;
-    
+
     // Apply pagination
     const paginatedProposals = filteredProposals.slice(offset, offset + limit);
-    
+
     const hasMore = offset + paginatedProposals.length < total;
 
     return {
@@ -587,18 +654,21 @@ export async function getUserProposalHistory(
 }
 
 // Get a specific proposal by ID
-export async function getProposalById(userId: string, proposalId: string): Promise<ProposalHistory | null> {
+export async function getProposalById(
+  userId: string,
+  proposalId: string
+): Promise<ProposalHistory | null> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
     const doc = await db.collection("proposal_history").doc(proposalId).get();
-    
+
     if (!doc.exists) {
       return null;
     }
 
     const data = doc.data()!;
-    
+
     // Ensure user can only access their own proposals
     if (data.userId !== userId) {
       return null;
@@ -607,13 +677,20 @@ export async function getProposalById(userId: string, proposalId: string): Promi
     // Get user's portfolioLink
     let portfolioLink: string | null = null;
     try {
-      const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+      const userSnap = await db
+        .collection("users")
+        .where("userId", "==", userId)
+        .limit(1)
+        .get();
       if (!userSnap.empty && userSnap.docs[0]) {
         const userData = userSnap.docs[0].data();
         portfolioLink = userData.portfolioLink || null;
       }
     } catch (err) {
-      console.error("[getProposalById] Error fetching user portfolioLink:", err);
+      console.error(
+        "[getProposalById] Error fetching user portfolioLink:",
+        err
+      );
     }
 
     const clientName = data.clientName || "";
@@ -632,27 +709,39 @@ export async function getProposalById(userId: string, proposalId: string): Promi
     if (data.allRefinementIds && data.allRefinementIds.length > 0) {
       // Fetch all refinement documents
       const refinementDocs = await Promise.all(
-        data.allRefinementIds.map((id: string) => db.collection("refinement_history").doc(id).get())
+        data.allRefinementIds.map((id: string) =>
+          db.collection("refinement_history").doc(id).get()
+        )
       );
 
       refinements = refinementDocs
-        .filter(doc => doc.exists)
-        .map(doc => {
+        .filter((doc) => doc.exists)
+        .map((doc) => {
           const refinement = doc.data()!;
-          
+
           // Ensure portfolioLink is included in both proposals
           const originalProposal: ProposalResponse = {
             ...refinement.originalProposal,
-            portfolioLink: portfolioLink || refinement.originalProposal.portfolioLink || "",
+            portfolioLink:
+              portfolioLink || refinement.originalProposal.portfolioLink || "",
           };
           const refinedProposal: ProposalResponse = {
             ...refinement.refinedProposal,
-            portfolioLink: portfolioLink || refinement.refinedProposal.portfolioLink || "",
+            portfolioLink:
+              portfolioLink || refinement.refinedProposal.portfolioLink || "",
           };
 
           // Generate MDX for both proposals
-          originalProposal.mdx = createProposalMDX(originalProposal, clientName, portfolioLink);
-          refinedProposal.mdx = createProposalMDX(refinedProposal, clientName, portfolioLink);
+          originalProposal.mdx = createProposalMDX(
+            originalProposal,
+            clientName,
+            portfolioLink
+          );
+          refinedProposal.mdx = createProposalMDX(
+            refinedProposal,
+            clientName,
+            portfolioLink
+          );
 
           return {
             id: doc.id,
@@ -672,13 +761,18 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       // Add original version (version 0)
       const originalProposalResponse: ProposalResponse = {
         ...data.proposalResponse,
-        portfolioLink: portfolioLink || data.proposalResponse.portfolioLink || "",
+        portfolioLink:
+          portfolioLink || data.proposalResponse.portfolioLink || "",
         version: 0,
         versionId: doc.id,
         proposalId: doc.id,
       };
-      originalProposalResponse.mdx = createProposalMDX(originalProposalResponse, clientName, portfolioLink);
-      
+      originalProposalResponse.mdx = createProposalMDX(
+        originalProposalResponse,
+        clientName,
+        portfolioLink
+      );
+
       versions.push({
         versionId: doc.id,
         version: 0,
@@ -687,7 +781,7 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       });
 
       // Add refinement versions
-      refinements.forEach(refinement => {
+      refinements.forEach((refinement) => {
         versions.push({
           versionId: refinement.id,
           version: refinement.version,
@@ -707,7 +801,11 @@ export async function getProposalById(userId: string, proposalId: string): Promi
       ...data.proposalResponse,
       portfolioLink: portfolioLink || data.proposalResponse.portfolioLink || "",
     };
-    mainProposalResponse.mdx = createProposalMDX(mainProposalResponse, clientName, portfolioLink);
+    mainProposalResponse.mdx = createProposalMDX(
+      mainProposalResponse,
+      clientName,
+      portfolioLink
+    );
 
     return {
       id: doc.id,
@@ -739,21 +837,23 @@ export function refineProposalPrompt(
   tone?: string,
   displayName?: string
 ): string {
-  const toneInstruction = tone ? `Maintain a ${tone} tone throughout.` : '';
-  
+  const toneInstruction = tone ? `Maintain a ${tone} tone throughout.` : "";
+
   const refinementInstructions = {
     expand_text: `Expand the proposal by adding more details, examples, and context. Make it more comprehensive while maintaining its effectiveness.`,
     trim_text: `Make the proposal more concise by removing unnecessary words and redundancy. Keep all key information but reduce wordiness.`,
     simplify_text: `Simplify complex sentences and break down technical jargon. Make it easier to understand while maintaining professionalism.`,
     improve_flow: `Reorganize the proposal to improve the logical flow and readability. Ensure smooth transitions between sections.`,
-    change_tone: `Adjust the tone to be ${tone}. Keep all the same information but adjust the language, formality, and voice accordingly.`
+    change_tone: `Adjust the tone to be ${tone}. Keep all the same information but adjust the language, formality, and voice accordingly.`,
   };
 
-  const closingNote = displayName 
+  const closingNote = displayName
     ? `\nIMPORTANT: The closing must insert a blank line before the professional closing (e.g., "Best regards", "Looking forward to working with you"). Then put the freelancer's name on the next line: ${displayName}`
-    : '';
+    : "";
 
-  return `You are refining an existing Upwork proposal. Your task is to ${refinementInstructions[refinementType]} ${toneInstruction}
+  return `You are refining an existing Upwork proposal. Your task is to ${
+    refinementInstructions[refinementType]
+  } ${toneInstruction}
 
 IMPORTANT: You MUST return your response as a valid JSON object with the SAME schema as the original:
 
@@ -764,7 +864,11 @@ IMPORTANT: You MUST return your response as a valid JSON object with the SAME sc
   "portfolioLink": "string - portfolio URL if provided, otherwise MUST be empty string \"\". DO NOT generate or create portfolio links if none is provided.",
   "availability": "string - availability statement",
   "support": "string - post-delivery support mention",
-  "closing": "${displayName ? `string - call-to-action to chat or move forward. Insert a blank line before the professional closing; then put the freelancer's name on the next line: ${displayName}` : 'string - call-to-action to chat or move forward'}"
+  "closing": "${
+    displayName
+      ? `string - call-to-action to chat or move forward. Insert a blank line before the professional closing; then put the freelancer's name on the next line: ${displayName}`
+      : "string - call-to-action to chat or move forward"
+  }"
 }
 
 Current Proposal:
@@ -773,7 +877,9 @@ ${JSON.stringify(currentProposal, null, 2)}
 Job Title: ${jobTitle}
 Client Name: ${clientName}
 
-Instructions: ${refinementInstructions[refinementType]} ${toneInstruction}${closingNote}
+Instructions: ${
+    refinementInstructions[refinementType]
+  } ${toneInstruction}${closingNote}
 
 CRITICAL: Your response must be ONLY a valid JSON object. Maintain all the core information but apply the requested refinement.`;
 }
@@ -799,35 +905,41 @@ export async function getLatestProposalVersion(
 ): Promise<{ proposal: ProposalResponse; refinementOrder: number }> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
-  
+
   try {
     // Get the proposal history record
-    const proposalDoc = await db.collection("proposal_history").doc(proposalId).get();
+    const proposalDoc = await db
+      .collection("proposal_history")
+      .doc(proposalId)
+      .get();
     if (!proposalDoc.exists) {
       throw new Error("Proposal not found");
     }
-    
+
     const proposalData = proposalDoc.data()!;
     if (proposalData.userId !== userId) {
       throw new Error("Unauthorized access");
     }
-    
+
     // If there are refinements, get the latest one
     if (proposalData.latestRefinementId) {
-      const refinementDoc = await db.collection("refinement_history").doc(proposalData.latestRefinementId).get();
+      const refinementDoc = await db
+        .collection("refinement_history")
+        .doc(proposalData.latestRefinementId)
+        .get();
       if (refinementDoc.exists) {
         const refinement = refinementDoc.data()! as RefinementHistory;
         return {
           proposal: refinement.refinedProposal,
-          refinementOrder: refinement.order
+          refinementOrder: refinement.order,
         };
       }
     }
-    
+
     // Return original proposal
     return {
       proposal: proposalData.proposalResponse,
-      refinementOrder: 0
+      refinementOrder: 0,
     };
   } finally {
     closeFirebaseApp();
@@ -844,11 +956,11 @@ export async function storeRefinement(
 ): Promise<string> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
-  
+
   try {
     const now = new Date();
     const newOrder = currentOrder + 1;
-    
+
     const refinement: Omit<RefinementHistory, "id"> = {
       proposalId,
       userId,
@@ -858,25 +970,33 @@ export async function storeRefinement(
       refinedProposal,
       createdAt: now,
       order: newOrder,
-      version: newOrder // Version number matches order
+      version: newOrder, // Version number matches order
     };
-    
+
     // Store refinement
-    const refinementRef = await db.collection("refinement_history").add(refinement);
-    
+    const refinementRef = await db
+      .collection("refinement_history")
+      .add(refinement);
+
     // Get current allRefinementIds array
-    const proposalDoc = await db.collection("proposal_history").doc(proposalId).get();
+    const proposalDoc = await db
+      .collection("proposal_history")
+      .doc(proposalId)
+      .get();
     const proposalData = proposalDoc.data();
     const allRefinementIds = proposalData?.allRefinementIds || [];
-    
+
     // Update proposal history to track latest refinement and add to array
-    await db.collection("proposal_history").doc(proposalId).update({
-      latestRefinementId: refinementRef.id,
-      refinementCount: newOrder,
-      allRefinementIds: [...allRefinementIds, refinementRef.id],
-      updatedAt: now
-    });
-    
+    await db
+      .collection("proposal_history")
+      .doc(proposalId)
+      .update({
+        latestRefinementId: refinementRef.id,
+        refinementCount: newOrder,
+        allRefinementIds: [...allRefinementIds, refinementRef.id],
+        updatedAt: now,
+      });
+
     return refinementRef.id;
   } finally {
     closeFirebaseApp();
@@ -887,26 +1007,45 @@ export async function storeRefinement(
 export async function getProposalVersions(
   proposalId: string,
   userId: string
-): Promise<Array<{ versionId: string; version: number; refinementLabel?: string; refinementType?: RefinementAction; createdAt: Date; proposal: ProposalResponse }>> {
+): Promise<
+  Array<{
+    versionId: string;
+    version: number;
+    refinementLabel?: string;
+    refinementType?: RefinementAction;
+    createdAt: Date;
+    proposal: ProposalResponse;
+  }>
+> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
-  
+
   try {
-    const versions: Array<{ versionId: string; version: number; refinementLabel?: string; refinementType?: RefinementAction; createdAt: Date; proposal: ProposalResponse }> = [];
-    
+    const versions: Array<{
+      versionId: string;
+      version: number;
+      refinementLabel?: string;
+      refinementType?: RefinementAction;
+      createdAt: Date;
+      proposal: ProposalResponse;
+    }> = [];
+
     // Get the original proposal
-    const proposalDoc = await db.collection("proposal_history").doc(proposalId).get();
+    const proposalDoc = await db
+      .collection("proposal_history")
+      .doc(proposalId)
+      .get();
     if (!proposalDoc.exists) {
       throw new Error("Proposal not found");
     }
-    
+
     const proposalData = proposalDoc.data()!;
     if (proposalData.userId !== userId) {
       throw new Error("Unauthorized access");
     }
-    
+
     const proposalResponse = proposalData.proposalResponse;
-    
+
     // Add version 0 (original)
     versions.push({
       versionId: proposalId,
@@ -916,17 +1055,22 @@ export async function getProposalVersions(
         ...proposalResponse,
         version: 0,
         versionId: proposalId,
-        proposalId
-      }
+        proposalId,
+      },
     });
-    
+
     // Get all refinements
-    if (proposalData.allRefinementIds && proposalData.allRefinementIds.length > 0) {
+    if (
+      proposalData.allRefinementIds &&
+      proposalData.allRefinementIds.length > 0
+    ) {
       const refinementDocs = await Promise.all(
-        proposalData.allRefinementIds.map((id: string) => db.collection("refinement_history").doc(id).get())
+        proposalData.allRefinementIds.map((id: string) =>
+          db.collection("refinement_history").doc(id).get()
+        )
       );
-      
-      refinementDocs.forEach(doc => {
+
+      refinementDocs.forEach((doc) => {
         if (doc.exists) {
           const refinement = doc.data()!;
           versions.push({
@@ -939,16 +1083,16 @@ export async function getProposalVersions(
               ...refinement.refinedProposal,
               version: refinement.version,
               versionId: doc.id,
-              proposalId
-            }
+              proposalId,
+            },
           });
         }
       });
-      
+
       // Sort by version number
       versions.sort((a, b) => a.version - b.version);
     }
-    
+
     return versions;
   } finally {
     closeFirebaseApp();

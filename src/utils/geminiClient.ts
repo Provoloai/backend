@@ -47,7 +47,7 @@ function is400LevelError(error: any): boolean {
   return false;
 }
 
-export async function callGemini(prompt: string, systemInstruction: string, maxRetries: number = 2): Promise<string> {
+export async function callGemini(prompt: string, systemInstruction: string, maxRetries: number = 1): Promise<string> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
