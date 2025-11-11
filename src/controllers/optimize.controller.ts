@@ -55,7 +55,7 @@ async function getUserProfileData(
         .where("userId", "==", userId)
         .limit(1)
         .get();
-
+      
       if (!userSnap.empty && userSnap.docs[0]) {
         const userData = userSnap.docs[0].data();
         return {
@@ -76,7 +76,7 @@ async function getUserProfileData(
       professionalTitle: null,
     };
   }
-
+  
   // Fetch all data from database if displayName not in token
   try {
     const app = getFirebaseApp();
@@ -86,7 +86,7 @@ async function getUserProfileData(
       .where("userId", "==", userId)
       .limit(1)
       .get();
-
+    
     if (!userSnap.empty && userSnap.docs[0]) {
       const userData = userSnap.docs[0].data();
       return {
@@ -101,7 +101,7 @@ async function getUserProfileData(
       err
     );
   }
-
+  
   return {
     displayName: undefined,
     portfolioLink: null,
@@ -208,23 +208,23 @@ export async function optimizeProfile(req: Request, res: Response) {
           );
         }
 
-        return res
-          .status(400)
-          .json(
-            newErrorResponse(
-              "Invalid Request",
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
               "The prompt attempted to do something it shouldn't. Your quota has been deducted."
-            )
-          );
-      }
+          )
+        );
+    }
 
       // If validation error (400-level), return 400 status
       if (err instanceof ValidationError) {
-        return res
-          .status(400)
-          .json(
-            newErrorResponse(
-              "Validation Error",
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Validation Error",
               err.message ||
                 "Invalid request. Please check your input and try again."
             )
@@ -723,14 +723,14 @@ export async function generateProposal(req: Request, res: Response) {
     // 7. Store proposal history and update quota in parallel (non-blocking for response)
     // Start both operations but don't wait for quota update
     const storePromise = storeProposalHistory(
-      userId,
-      {
-        client_name: sanitizedClientName,
-        job_title: sanitizedJobTitle,
-        proposal_tone: proposal_tone,
-        job_summary: sanitizedJobSummary,
-      },
-      proposalResponse
+        userId,
+        {
+          client_name: sanitizedClientName,
+          job_title: sanitizedJobTitle,
+          proposal_tone: proposal_tone,
+          job_summary: sanitizedJobSummary,
+        },
+        proposalResponse
     ).catch((err) => {
       console.warn(
         "Warning: Failed to store proposal history for user",
@@ -905,7 +905,7 @@ export async function refineProposal(req: Request, res: Response) {
     // 2. Validate input
     const { proposalId, refinementType, newTone } =
       req.body as RefineProposalReq;
-
+    
     if (!proposalId || !refinementType) {
       return res
         .status(400)
@@ -914,7 +914,7 @@ export async function refineProposal(req: Request, res: Response) {
             "Invalid Request",
             "Missing proposalId or refinementType"
           )
-        );
+      );
     }
 
     const validRefinementTypes: RefinementAction[] = [
@@ -924,7 +924,7 @@ export async function refineProposal(req: Request, res: Response) {
       "improve_flow",
       "change_tone",
     ];
-
+    
     if (!validRefinementTypes.includes(refinementType)) {
       return res
         .status(400)
@@ -940,7 +940,7 @@ export async function refineProposal(req: Request, res: Response) {
             "Invalid Request",
             "newTone required for change_tone refinement"
           )
-        );
+      );
     }
 
     // 3. Get proposal details
@@ -1022,7 +1022,7 @@ export async function refineProposal(req: Request, res: Response) {
             "AI Service Error",
             "Failed to refine proposal. Please try again."
           )
-        );
+      );
     }
 
     // 6. Parse AI response
@@ -1038,7 +1038,7 @@ export async function refineProposal(req: Request, res: Response) {
             "Processing Error",
             "Failed to process refined proposal."
           )
-        );
+      );
     }
 
     // 6.5. Validate and create MDX content
@@ -1064,12 +1064,12 @@ export async function refineProposal(req: Request, res: Response) {
     return res
       .status(200)
       .json(
-        newSuccessResponse(
-          "Proposal Refined",
-          "Proposal refined successfully",
-          refinedProposal
-        )
-      );
+      newSuccessResponse(
+        "Proposal Refined",
+        "Proposal refined successfully",
+        refinedProposal
+      )
+    );
   } catch (err) {
     console.error("[refineProposal] Error:", err);
     return res
@@ -1079,7 +1079,7 @@ export async function refineProposal(req: Request, res: Response) {
           "Internal Server Error",
           "An error occurred while refining the proposal."
         )
-      );
+    );
   }
 }
 
@@ -1108,12 +1108,12 @@ export async function getProposalVersionsController(
     return res
       .status(200)
       .json(
-        newSuccessResponse(
-          "Versions Retrieved",
-          "Proposal versions retrieved successfully",
-          { versions }
-        )
-      );
+      newSuccessResponse(
+        "Versions Retrieved",
+        "Proposal versions retrieved successfully",
+        { versions }
+      )
+    );
   } catch (err) {
     console.error("[getProposalVersionsController] Error:", err);
     return res
@@ -1123,7 +1123,7 @@ export async function getProposalVersionsController(
           "Internal Server Error",
           "An error occurred while retrieving proposal versions."
         )
-      );
+    );
   }
 }
 
