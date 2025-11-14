@@ -101,7 +101,7 @@ export async function login(req: Request, res: Response) {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
       sameSite: isProduction ? "none" : "lax",
-      secure: isProduction,
+      secure: false,
       httpOnly: true,
     });
 
@@ -350,7 +350,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
       sameSite: isProduction ? "none" : "lax",
-      secure: isProduction,
+      secure: false,
       httpOnly: true,
     });
 
@@ -485,7 +485,7 @@ export async function logout(req: Request, res: Response) {
       maxAge: -1,
       path: "/",
       sameSite: isProduction ? "none" : "lax",
-      secure: isProduction,
+      secure: false,
       httpOnly: true,
     });
 
