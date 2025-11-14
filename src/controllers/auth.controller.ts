@@ -99,7 +99,7 @@ export async function login(req: Request, res: Response) {
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
-      sameSite: "none",
+      sameSite: "lax",
       secure: true,
       httpOnly: true,
     });
@@ -347,7 +347,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
-      sameSite: "none",
+      sameSite: "lax",
       secure: true,
       httpOnly: true,
     });
@@ -481,7 +481,7 @@ export async function logout(req: Request, res: Response) {
     res.cookie("session", "", {
       maxAge: -1,
       path: "/",
-      sameSite: "none",
+      sameSite: "lax",
       secure: true,
       httpOnly: true,
     });
