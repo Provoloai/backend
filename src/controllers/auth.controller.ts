@@ -96,11 +96,10 @@ export async function login(req: Request, res: Response) {
         );
     }
 
-    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
-      sameSite: isProduction ? "none" : "lax",
+      sameSite: "none",
       secure: false,
       httpOnly: true,
     });
@@ -345,11 +344,10 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
     }
 
-    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
-      sameSite: isProduction ? "none" : "lax",
+      sameSite: "none",
       secure: false,
       httpOnly: true,
     });
@@ -480,11 +478,10 @@ export async function logout(req: Request, res: Response) {
   try {
     const sessionCookie = getCookie(req, "session");
 
-    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("session", "", {
       maxAge: -1,
       path: "/",
-      sameSite: isProduction ? "none" : "lax",
+      sameSite: "none",
       secure: false,
       httpOnly: true,
     });
