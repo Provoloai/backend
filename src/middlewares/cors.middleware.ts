@@ -3,13 +3,7 @@ import type { CorsOptions } from "cors";
 
 const devOrigins = ["http://localhost:5173", "http://localhost:3000"];
 
-export const prodOrigins = [
-  "https://provolo.org",
-  "http://localhost:5173",
-  "https://provolo.vercel.app",
-  "https://provolo-backend.fly.dev",
-  "https://frontend-gray-omega-5m2sf8zfln.vercel.app",
-];
+export const prodOrigins = ["https://provolo.org", "https://provolo.vercel.app"];
 
 export function devCors(): CorsOptions {
   return {

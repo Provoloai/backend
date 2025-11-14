@@ -87,6 +87,8 @@ export async function emailVerificationMiddleware(req: Request, res: Response, n
     next();
   } catch (err) {
     console.error("[emailVerificationMiddleware] Error:", err);
-    return res.status(500).json(newErrorResponse("Internal Server Error", "Unable to verify email status"));
+    return res
+      .status(500)
+      .json(newErrorResponse("Internal Server Error", "Unable to verify email status"));
   }
 }

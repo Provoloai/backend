@@ -26,7 +26,11 @@ function createSafeUserObject(user: User): Omit<User, "otp" | "otpExpires"> {
 }
 
 // Generates and stores a new OTP code for email verification, then sends it via email (expires after 15 minutes)
-export async function generateAndSendOTP(userId: string, email: string, db: FirebaseFirestore.Firestore): Promise<void> {
+export async function generateAndSendOTP(
+  userId: string,
+  email: string,
+  db: FirebaseFirestore.Firestore
+): Promise<void> {
   const otp = generateOTP();
   const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
 
@@ -54,10 +58,7 @@ export async function login(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse(
-            "Invalid Request",
-            "Please check your request format and try again."
-          )
+          newErrorResponse("Invalid Request", "Please check your request format and try again.")
         );
     }
 
@@ -95,11 +96,12 @@ export async function login(req: Request, res: Response) {
         );
     }
 
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
-      sameSite: "none",
-      secure: true,
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
       httpOnly: true,
     });
 
@@ -192,10 +194,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse(
-            "Invalid Request",
-            "Please check your request format and try again."
-          )
+          newErrorResponse("Invalid Request", "Please check your request format and try again.")
         );
 
     const app = getFirebaseApp();
@@ -266,16 +265,12 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           createdAt: existingUserData.createdAt
             ? existingUserData.createdAt instanceof Date
               ? existingUserData.createdAt
-              : new Date(
-                  (existingUserData.createdAt as Timestamp).seconds * 1000
-                )
+              : new Date((existingUserData.createdAt as Timestamp).seconds * 1000)
             : now,
           updatedAt: existingUserData.updatedAt
             ? existingUserData.updatedAt instanceof Date
               ? existingUserData.updatedAt
-              : new Date(
-                  (existingUserData.updatedAt as Timestamp).seconds * 1000
-                )
+              : new Date((existingUserData.updatedAt as Timestamp).seconds * 1000)
             : now,
         };
       }
@@ -321,10 +316,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
 
         userData.polarId = polarCustomerResult.id;
       } catch (error) {
-        console.error(
-          `Failed to create Polar customer for new user ${userID}:`,
-          error
-        );
+        console.error(`Failed to create Polar customer for new user ${userID}:`, error);
       }
 
       await createQuotaHistoryFromTier(userID, starterTierId, false);
@@ -353,11 +345,12 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
     }
 
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
-      sameSite: "none",
-      secure: true,
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
       httpOnly: true,
     });
 
@@ -366,7 +359,9 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       : "User profile retrieved";
 
     const action = isNewUser ? "Signup Successful" : "Login Successful";
-    return res.status(200).json(newSuccessResponse(action, message, userData ? createSafeUserObject(userData) : null));
+    return res
+      .status(200)
+      .json(newSuccessResponse(action, message, userData ? createSafeUserObject(userData) : null));
   } catch (err) {
     console.error("Signup Error:", err);
     return res
@@ -387,9 +382,7 @@ export async function verifySession(req: Request, res: Response) {
     if (!sessionCookie) {
       return res
         .status(401)
-        .json(
-          newErrorResponse("No Session", "No session found. Please log in.")
-        );
+        .json(newErrorResponse("No Session", "No session found. Please log in."));
     }
 
     const app = getFirebaseApp();
@@ -403,17 +396,12 @@ export async function verifySession(req: Request, res: Response) {
       return res
         .status(401)
         .json(
-          newErrorResponse(
-            "Invalid Session",
-            "Session is invalid or expired. Please log in again."
-          )
+          newErrorResponse("Invalid Session", "Session is invalid or expired. Please log in again.")
         );
     }
 
     const usersRef = db.collection("users");
-    const userQuery = usersRef
-      .where("userId", "==", decodedUserInfo.uid)
-      .limit(1);
+    const userQuery = usersRef.where("userId", "==", decodedUserInfo.uid).limit(1);
     const docs = await userQuery.get();
     const doc = docs.docs[0];
     if (!doc) {
@@ -477,11 +465,12 @@ export async function logout(req: Request, res: Response) {
   try {
     const sessionCookie = getCookie(req, "session");
 
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("session", "", {
       maxAge: -1,
       path: "/",
-      sameSite: "none",
-      secure: true,
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
       httpOnly: true,
     });
 
@@ -490,10 +479,7 @@ export async function logout(req: Request, res: Response) {
         const app = getFirebaseApp();
         const auth = getAuth(app);
 
-        const decodedToken = await auth.verifySessionCookie(
-          sessionCookie,
-          true
-        );
+        const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
 
         await auth.revokeRefreshTokens(decodedToken.uid);
       } catch (err) {
@@ -503,13 +489,7 @@ export async function logout(req: Request, res: Response) {
 
     return res
       .status(200)
-      .json(
-        newSuccessResponse(
-          "Logout Successful",
-          "User logged out successfully",
-          null
-        )
-      );
+      .json(newSuccessResponse("Logout Successful", "User logged out successfully", null));
   } finally {
     closeFirebaseApp();
   }
@@ -545,16 +525,10 @@ export async function updateUsername(req: Request, res: Response) {
     if (!req.userID || !req.userEmail) {
       return res
         .status(401)
-        .json(
-          newErrorResponse(
-            "Unauthorized",
-            "You must be logged in to update your username."
-          )
-        );
+        .json(newErrorResponse("Unauthorized", "You must be logged in to update your username."));
     }
 
-    const isFirstTimeUser =
-      !req.userDisplayName || req.userDisplayName.trim() === "";
+    const isFirstTimeUser = !req.userDisplayName || req.userDisplayName.trim() === "";
     const now = new Date();
 
     const app = getFirebaseApp();
@@ -610,7 +584,7 @@ export async function updateUsername(req: Request, res: Response) {
       try {
         const emailResult = await sendWelcomeEmail({
           name: username,
-          email: req.userEmail
+          email: req.userEmail,
         });
 
         if (emailResult.success) {
@@ -630,9 +604,14 @@ export async function updateUsername(req: Request, res: Response) {
             mailerliteId: subscribeUserResult.data.data.id,
             updatedAt: now,
           });
-          console.log(`User ${req.userID} subscribed to MailerLite with ID: ${subscribeUserResult.data.data.id}`);
+          console.log(
+            `User ${req.userID} subscribed to MailerLite with ID: ${subscribeUserResult.data.data.id}`
+          );
         } else {
-          console.warn(`Failed to subscribe user ${req.userID} to MailerLite:`, subscribeUserResult.message);
+          console.warn(
+            `Failed to subscribe user ${req.userID} to MailerLite:`,
+            subscribeUserResult.message
+          );
         }
       } catch (mailerliteErr) {
         console.error("Error subscribing user to MailerLite:", mailerliteErr);
@@ -724,16 +703,14 @@ export async function updateProfile(req: Request, res: Response) {
     if (!req.userID) {
       return res
         .status(401)
-        .json(
-          newErrorResponse(
-            "Unauthorized",
-            "You must be logged in to update your profile."
-          )
-        );
+        .json(newErrorResponse("Unauthorized", "You must be logged in to update your profile."));
     }
 
     if (portfolio_link !== undefined) {
-      if (typeof portfolio_link !== "string" || (portfolio_link.trim() && !/^https?:\/\/.+/.test(portfolio_link.trim()))) {
+      if (
+        typeof portfolio_link !== "string" ||
+        (portfolio_link.trim() && !/^https?:\/\/.+/.test(portfolio_link.trim()))
+      ) {
         return res
           .status(400)
           .json(
@@ -803,7 +780,7 @@ export async function updateProfile(req: Request, res: Response) {
 
     const updatedDocs = await userQuery.get();
     const updatedUserDoc = updatedDocs.docs[0];
-    
+
     if (!updatedUserDoc) {
       return res
         .status(404)
@@ -878,23 +855,13 @@ export async function verifyEmail(req: Request, res: Response) {
     if (!req.userID) {
       return res
         .status(401)
-        .json(
-          newErrorResponse(
-            "Unauthorized",
-            "You must be logged in to verify your email."
-          )
-        );
+        .json(newErrorResponse("Unauthorized", "You must be logged in to verify your email."));
     }
 
     if (!otp || typeof otp !== "string" || otp.length !== 6) {
       return res
         .status(400)
-        .json(
-          newErrorResponse(
-            "Invalid OTP",
-            "Please provide a valid 6-digit OTP code."
-          )
-        );
+        .json(newErrorResponse("Invalid OTP", "Please provide a valid 6-digit OTP code."));
     }
 
     const app = getFirebaseApp();
@@ -922,12 +889,7 @@ export async function verifyEmail(req: Request, res: Response) {
     if (userData.emailVerified === true) {
       return res
         .status(400)
-        .json(
-          newErrorResponse(
-            "Already Verified",
-            "Your email has already been verified."
-          )
-        );
+        .json(newErrorResponse("Already Verified", "Your email has already been verified."));
     }
 
     if (!userData.otp || userData.otp !== otp) {
@@ -951,10 +913,7 @@ export async function verifyEmail(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse(
-            "OTP Expired",
-            "The OTP code has expired. Please request a new one."
-          )
+          newErrorResponse("OTP Expired", "The OTP code has expired. Please request a new one.")
         );
     }
 
@@ -1036,10 +995,7 @@ export async function resendVerificationOTP(req: Request, res: Response) {
       return res
         .status(401)
         .json(
-          newErrorResponse(
-            "Unauthorized",
-            "You must be logged in to request a verification code."
-          )
+          newErrorResponse("Unauthorized", "You must be logged in to request a verification code.")
         );
     }
 
@@ -1067,12 +1023,7 @@ export async function resendVerificationOTP(req: Request, res: Response) {
     if (userData.emailVerified === true) {
       return res
         .status(400)
-        .json(
-          newErrorResponse(
-            "Already Verified",
-            "Your email has already been verified."
-          )
-        );
+        .json(newErrorResponse("Already Verified", "Your email has already been verified."));
     }
 
     try {
