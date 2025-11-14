@@ -378,26 +378,41 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
 // Verifies if the current session cookie is valid and returns user data
 export async function verifySession(req: Request, res: Response) {
   try {
-    const sessionCookie = getCookie(req, "session");
-    if (!sessionCookie) {
-      return res
-        .status(401)
-        .json(newErrorResponse("No Session", "No session found. Please log in."));
-    }
-
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
 
+    const sessionCookie = getCookie(req, "session");
     let decodedUserInfo: DecodedIdToken | null = null;
-    try {
-      decodedUserInfo = await auth.verifySessionCookie(sessionCookie, true);
-    } catch (err) {
-      return res
-        .status(401)
-        .json(
-          newErrorResponse("Invalid Session", "Session is invalid or expired. Please log in again.")
-        );
+    if (sessionCookie) {
+      try {
+        decodedUserInfo = await auth.verifySessionCookie(sessionCookie, true);
+      } catch (err) {
+        return res
+          .status(401)
+          .json(
+            newErrorResponse(
+              "Invalid Session",
+              "Session is invalid or expired. Please log in again."
+            )
+          );
+      }
+    } else {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const idToken = authHeader.replace("Bearer ", "");
+        try {
+          decodedUserInfo = await auth.verifyIdToken(idToken);
+        } catch (err) {
+          return res
+            .status(401)
+            .json(newErrorResponse("Unauthorized", "Invalid or expired token."));
+        }
+      } else {
+        return res
+          .status(401)
+          .json(newErrorResponse("Unauthorized", "No session or token provided."));
+      }
     }
 
     const usersRef = db.collection("users");
