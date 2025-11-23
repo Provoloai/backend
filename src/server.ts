@@ -11,7 +11,7 @@ import { corsMiddleware } from "./middlewares/cors.middleware.ts";
 
 dotenv.config();
 
-const port = Number(process.env.PORT) || 8080;
+const port = Number(process.env.PORT);
 const swaggerSpec = swaggerJsdoc(SwaggerOptions);
 
 const app = express();
@@ -26,6 +26,4 @@ app.get("/", (req: Request, res: Response) => {
   res.send("Provolo Server!");
 });
 
-app.listen(port, "0.0.0.0", () => {
-  process.stdout.write(`Server is running on port ${port} and bound to 0.0.0.0\n`);
-});
+app.listen(port, () => console.log(`Server is running on port ${port}`));
