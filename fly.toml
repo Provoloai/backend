@@ -4,7 +4,7 @@
 #
 
 app = 'devenvbackend'
-primary_region = 'jnb'
+primary_region = 'cdg'
 
 [build]
 
