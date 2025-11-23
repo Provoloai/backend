@@ -99,8 +99,8 @@ export async function login(req: Request, res: Response) {
     res.cookie("session", cookie, {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       path: "/",
-      sameSite: "none",
-      secure: false,
+      sameSite: "lax",
+      secure: true,
       httpOnly: true,
     });
 
