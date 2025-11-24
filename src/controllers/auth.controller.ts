@@ -96,13 +96,17 @@ export async function login(req: Request, res: Response) {
         );
     }
 
-    res.cookie("session", cookie, {
+    const isProduction = process.env.NODE_ENV === "production";
+
+    const COOKIE_OPTIONS = {
       maxAge: 5 * 24 * 60 * 60 * 1000,
-      path: "/",
-      sameSite: "lax",
-      secure: true,
       httpOnly: true,
-    });
+      path: "/",
+      sameSite: isProduction ? "lax" : "none",
+      secure: isProduction,
+    } as const;
+
+    res.cookie("session", cookie, COOKIE_OPTIONS);
 
     const usersRef = db.collection("users");
     const userQuery = usersRef.where("userId", "==", token.uid).limit(1);
@@ -344,13 +348,17 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
     }
 
-    res.cookie("session", cookie, {
+    const isProduction = process.env.NODE_ENV === "production";
+
+    const COOKIE_OPTIONS = {
       maxAge: 5 * 24 * 60 * 60 * 1000,
-      path: "/",
-      sameSite: "lax",
-      secure: true,
       httpOnly: true,
-    });
+      path: "/",
+      sameSite: isProduction ? "lax" : "none",
+      secure: isProduction,
+    } as const;
+
+    res.cookie("session", cookie, COOKIE_OPTIONS);
 
     const message = isNewUser
       ? "Signup successful! Your account has been created."
@@ -478,13 +486,17 @@ export async function logout(req: Request, res: Response) {
   try {
     const sessionCookie = getCookie(req, "session");
 
-    res.cookie("session", "", {
+    const isProduction = process.env.NODE_ENV === "production";
+
+    const COOKIE_OPTIONS = {
       maxAge: -1,
-      path: "/",
-      sameSite: "lax",
-      secure: true,
       httpOnly: true,
-    });
+      path: "/",
+      sameSite: isProduction ? "lax" : "none",
+      secure: isProduction,
+    } as const;
+
+    res.cookie("session", "", COOKIE_OPTIONS);
 
     if (sessionCookie) {
       try {
