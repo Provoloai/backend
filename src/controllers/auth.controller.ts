@@ -103,9 +103,11 @@ export async function login(req: Request, res: Response) {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       path: "/",
-      sameSite: "lax",
+      sameSite: isProduction ? "lax" : "none",
       secure: isProduction,
     } as const;
+
+    console.log("Setting cookie with options:", COOKIE_OPTIONS);
 
     res.cookie("session", cookie, COOKIE_OPTIONS);
 
@@ -356,10 +358,11 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       path: "/",
-      sameSite: "lax",
+      sameSite: isProduction ? "lax" : "none",
       secure: isProduction,
     } as const;
 
+    console.log("Setting cookie with options:", COOKIE_OPTIONS);
     res.cookie("session", cookie, COOKIE_OPTIONS);
 
     const message = isNewUser
@@ -495,10 +498,11 @@ export async function logout(req: Request, res: Response) {
       maxAge: 0,
       httpOnly: true,
       path: "/",
-      sameSite: "lax",
+      sameSite: isProduction ? "lax" : "none",
       secure: isProduction,
     } as const;
 
+    console.log("Setting cookie with options:", COOKIE_OPTIONS);
     res.cookie("session", "", COOKIE_OPTIONS);
 
     if (sessionCookie) {

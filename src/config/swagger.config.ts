@@ -16,7 +16,7 @@ export const SwaggerOptions = {
         url: "http://localhost:8001",
       },
       {
-        url: "https://provolo-backend.fly.dev",
+        url: "https://devenvbackend.fly.dev",
       },
     ],
     basePath: "/",
