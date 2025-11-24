@@ -104,7 +104,7 @@ export async function login(req: Request, res: Response) {
       httpOnly: true,
       path: "/",
       sameSite: isProduction ? "lax" : "none",
-      secure: isProduction,
+      secure: true,
     } as const;
 
     console.log("Setting cookie with options:", COOKIE_OPTIONS);
@@ -359,7 +359,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       httpOnly: true,
       path: "/",
       sameSite: isProduction ? "lax" : "none",
-      secure: isProduction,
+      secure: true,
     } as const;
 
     console.log("Setting cookie with options:", COOKIE_OPTIONS);
@@ -499,7 +499,7 @@ export async function logout(req: Request, res: Response) {
       httpOnly: true,
       path: "/",
       sameSite: isProduction ? "lax" : "none",
-      secure: isProduction,
+      secure: true,
     } as const;
 
     console.log("Setting cookie with options:", COOKIE_OPTIONS);
