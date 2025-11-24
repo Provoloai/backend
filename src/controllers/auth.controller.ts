@@ -97,12 +97,13 @@ export async function login(req: Request, res: Response) {
     }
 
     const isProduction = process.env.NODE_ENV === "production";
+    console.log("isProduction:", isProduction);
 
     const COOKIE_OPTIONS = {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       path: "/",
-      sameSite: isProduction ? "lax" : "none",
+      sameSite: "lax",
       secure: isProduction,
     } as const;
 
@@ -349,12 +350,13 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     }
 
     const isProduction = process.env.NODE_ENV === "production";
+    console.log("isProduction:", isProduction);
 
     const COOKIE_OPTIONS = {
       maxAge: 5 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       path: "/",
-      sameSite: isProduction ? "lax" : "none",
+      sameSite: "lax",
       secure: isProduction,
     } as const;
 
@@ -487,12 +489,13 @@ export async function logout(req: Request, res: Response) {
     const sessionCookie = getCookie(req, "session");
 
     const isProduction = process.env.NODE_ENV === "production";
+    console.log("isProduction:", isProduction);
 
     const COOKIE_OPTIONS = {
-      maxAge: -1,
+      maxAge: 0,
       httpOnly: true,
       path: "/",
-      sameSite: isProduction ? "lax" : "none",
+      sameSite: "lax",
       secure: isProduction,
     } as const;
 
