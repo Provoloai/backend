@@ -179,6 +179,7 @@ export async function login(req: Request, res: Response) {
         )
       );
   } catch (err) {
+    console.log("Login Error:", err);
     return res
       .status(500)
       .json(
