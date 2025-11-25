@@ -46,6 +46,7 @@ async function getUserProfileData(
   displayName: string | undefined;
   portfolioLink: string | null;
   professionalTitle: string | null;
+  tierId: string | null;
 }> {
   // Use displayName from token if available
   if (tokenDisplayName) {
@@ -60,6 +61,7 @@ async function getUserProfileData(
           displayName: tokenDisplayName,
           portfolioLink: userData.portfolioLink || null,
           professionalTitle: userData.professionalTitle || null,
+          tierId: userData.tierId || null,
         };
       }
     } catch (err) {
@@ -69,6 +71,7 @@ async function getUserProfileData(
       displayName: tokenDisplayName,
       portfolioLink: null,
       professionalTitle: null,
+      tierId: null,
     };
   }
 
@@ -84,6 +87,7 @@ async function getUserProfileData(
         displayName: userData.displayName,
         portfolioLink: userData.portfolioLink || null,
         professionalTitle: userData.professionalTitle || null,
+        tierId: userData.tierId || null,
       };
     }
   } catch (err) {
@@ -94,6 +98,7 @@ async function getUserProfileData(
     displayName: undefined,
     portfolioLink: null,
     professionalTitle: null,
+    tierId: null,
   };
 }
 
@@ -242,15 +247,29 @@ export async function optimizeProfile(req: Request, res: Response) {
       console.warn("Warning: Failed to update quota for user", userId, err);
     });
 
-    // 8. Store optimization history (fire and forget for response speed)
-    storeOptimizerHistory({
-      userId,
-      optimizerType: "upwork",
-      originalInput: `Full Name: ${sanitizedFullName}\nProfessional Title: ${sanitizedTitle}\nProfile Content:\n${sanitizedProfile}`,
-      response: parsedResponse,
-    }).catch((err) => {
-      console.warn("Failed to store optimizer history (upwork)", err);
-    });
+    // 8. Store optimization history only for premium users (not starter/free)
+    try {
+      const profileData = await getUserProfileData(userId, req.userDisplayName);
+      const starterTierId = process.env.STARTER_TIER_ID || "starter";
+      const userTierId = profileData?.tierId || null;
+
+      if (userTierId && userTierId !== starterTierId) {
+        // premium user - store optimizer history
+        storeOptimizerHistory({
+          userId,
+          optimizerType: "upwork",
+          originalInput: `Full Name: ${sanitizedFullName}\nProfessional Title: ${sanitizedTitle}\nProfile Content:\n${sanitizedProfile}`,
+          response: parsedResponse,
+        }).catch((err) => {
+          console.warn("Failed to store optimizer history (upwork)", err);
+        });
+      } else {
+        // non-premium - skip storing history
+        console.debug(`[optimizeProfile] Skipping optimizer history store for user ${userId} with tier ${userTierId}`);
+      }
+    } catch (err) {
+      console.warn("Failed to check user tier before storing optimizer history", err);
+    }
 
     // 9. Return success immediately (quota + history storing continue in background)
     return res
