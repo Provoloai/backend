@@ -265,7 +265,9 @@ export async function optimizeProfile(req: Request, res: Response) {
         });
       } else {
         // non-premium - skip storing history
-        console.debug(`[optimizeProfile] Skipping optimizer history store for user ${userId} with tier ${userTierId}`);
+        console.debug(
+          `[optimizeProfile] Skipping optimizer history store for user ${userId} with tier ${userTierId}`
+        );
       }
     } catch (err) {
       console.warn("Failed to check user tier before storing optimizer history", err);
