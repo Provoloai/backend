@@ -304,8 +304,14 @@ export async function getUserOptimizerHistory(
         filtered.push(record);
       } else {
         const searchLower = search.toLowerCase();
+        const originalInputString =
+          typeof record.originalInput === "string"
+            ? record.originalInput
+            : record.originalInput
+            ? Object.values(record.originalInput).join(" ")
+            : "";
         const haystack = [
-          record.originalInput,
+          originalInputString,
           record.response.optimizedProfileOverview,
           record.response.weaknessesAndOptimization,
         ]

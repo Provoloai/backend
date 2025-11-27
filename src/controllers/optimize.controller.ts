@@ -258,7 +258,11 @@ export async function optimizeProfile(req: Request, res: Response) {
         storeOptimizerHistory({
           userId,
           optimizerType: "upwork",
-          originalInput: `Full Name: ${sanitizedFullName}\nProfessional Title: ${sanitizedTitle}\nProfile Content:\n${sanitizedProfile}`,
+          originalInput: {
+            fullName: sanitizedFullName,
+            professionalTitle: sanitizedTitle,
+            content: sanitizedProfile,
+          },
           response: parsedResponse,
         }).catch((err) => {
           console.warn("Failed to store optimizer history (upwork)", err);
@@ -440,7 +444,11 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
     storeOptimizerHistory({
       userId,
       optimizerType: "linkedin",
-      originalInput: `LinkedIn Profile Input:\n${sanitizedProfile}`,
+      originalInput: {
+        fullName: sanitizedFullName,
+        professionalTitle: sanitizedTitle,
+        content: sanitizedProfile,
+      },
       response: parsedResponse,
     }).catch((err) => {
       console.warn("Failed to store optimizer history (linkedin)", err);

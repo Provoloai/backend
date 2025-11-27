@@ -27,7 +27,11 @@ Record structure:
 id: string
 userId: string
 optimizerType: "upwork" | "linkedin"
-originalInput: string (raw submitted profile input)
+originalInput: {
+  fullName?: string
+  professionalTitle?: string
+  content: string
+} (structured submitted profile input)
 response: {
 	weaknessesAndOptimization: string
 	optimizedProfileOverview: string
