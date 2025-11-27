@@ -1,0 +1,134 @@
+import { getFirestore } from "firebase-admin/firestore";
+import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
+import type { Notification } from "../types/notification.d.ts";
+
+// Broadcasts a notification to all users.
+export const broadcastToAll = async (
+  title: string,
+  message: string,
+  link?: string
+): Promise<void> => {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+
+  const notificationsCollection = db.collection("notifications");
+  const usersCollection = db.collection("users");
+
+  const usersSnapshot = await usersCollection.get();
+  if (usersSnapshot.empty) {
+    return;
+  }
+
+  const batch = db.batch();
+  usersSnapshot.forEach((userDoc) => {
+    const newNotifRef = notificationsCollection.doc();
+    batch.set(newNotifRef, {
+      recipient: userDoc.id,
+      title,
+      message,
+      link: link || null,
+      read: false,
+      createdAt: new Date(),
+    });
+  });
+
+  await batch.commit();
+};
+
+// Broadcasts a notification to users of a specific tier.
+export const broadcastToTier = async (
+  tierSlug: string,
+  title: string,
+  message: string,
+  link?: string
+): Promise<void> => {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+
+  const notificationsCollection = db.collection("notifications");
+  const usersCollection = db.collection("users");
+
+  const usersSnapshot = await usersCollection
+    .where("tierSlug", "==", tierSlug)
+    .get();
+  if (usersSnapshot.empty) {
+    return;
+  }
+
+  const batch = db.batch();
+  usersSnapshot.forEach((userDoc) => {
+    const newNotifRef = notificationsCollection.doc();
+    batch.set(newNotifRef, {
+      recipient: userDoc.id,
+      title,
+      message,
+      link: link || null,
+      read: false,
+      createdAt: new Date(),
+    });
+  });
+
+  await batch.commit();
+};
+
+// Fetches notifications for a specific user.
+export const getUserNotifications = async (
+  userId: string,
+  options: { limit?: number; startAfter?: string } = {}
+): Promise<{ notifications: Notification[]; lastVisibleId: string | null }> => {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  const notificationsCollection = db.collection("notifications");
+
+  const queryLimit = options.limit || 20;
+  let query = notificationsCollection
+    .where("recipient", "==", userId)
+    .orderBy("createdAt", "desc")
+    .limit(queryLimit);
+
+  if (options.startAfter) {
+    const lastVisibleDoc = await notificationsCollection
+      .doc(options.startAfter)
+      .get();
+    if (lastVisibleDoc.exists) {
+      query = query.startAfter(lastVisibleDoc);
+    }
+  }
+
+  const snapshot = await query.get();
+
+  if (snapshot.empty) {
+    return { notifications: [], lastVisibleId: null };
+  }
+
+  const notifications = snapshot.docs.map(
+    (doc) =>
+      ({
+        id: doc.id,
+        ...doc.data(),
+      } as Notification)
+  );
+
+  const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+  const lastVisibleId = lastVisible ? lastVisible.id : null;
+
+  return { notifications, lastVisibleId };
+};
+
+// Deletes a single notification for a user, ensuring ownership.
+export const deleteUserNotification = async (
+  notificationId: string,
+  userId: string
+): Promise<boolean> => {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  const notifRef = db.collection("notifications").doc(notificationId);
+  const notifDoc = await notifRef.get();
+
+  if (!notifDoc.exists || notifDoc.data()?.recipient !== userId) {
+    return false;
+  }
+
+  await notifRef.delete();
+  return true;
+};

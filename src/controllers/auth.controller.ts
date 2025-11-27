@@ -6,7 +6,10 @@ import { closeFirebaseApp, getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import { newSuccessResponse, newErrorResponse } from "../utils/apiResponse.ts";
 import { createQuotaHistoryFromTier } from "../utils/quota.utils.ts";
 import { createPolarCustomer } from "../utils/polarClient.ts";
-import { sendWelcomeEmail, sendVerificationEmail } from "../services/mail.service.ts";
+import {
+  sendWelcomeEmail,
+  sendVerificationEmail,
+} from "../services/mail.service.ts";
 import { subscribeUser } from "../services/mailerlite.service.ts";
 
 import type { NewUser, User } from "../types/user.ts";
@@ -58,7 +61,10 @@ export async function login(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse("Invalid Request", "Please check your request format and try again.")
+          newErrorResponse(
+            "Invalid Request",
+            "Please check your request format and try again."
+          )
         );
     }
 
@@ -201,7 +207,10 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse("Invalid Request", "Please check your request format and try again.")
+          newErrorResponse(
+            "Invalid Request",
+            "Please check your request format and try again."
+          )
         );
 
     const app = getFirebaseApp();
@@ -267,17 +276,23 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
           otpExpires: existingUserData.otpExpires
             ? existingUserData.otpExpires instanceof Date
               ? existingUserData.otpExpires
-              : new Date((existingUserData.otpExpires as Timestamp).seconds * 1000)
+              : new Date(
+                  (existingUserData.otpExpires as Timestamp).seconds * 1000
+                )
             : null,
           createdAt: existingUserData.createdAt
             ? existingUserData.createdAt instanceof Date
               ? existingUserData.createdAt
-              : new Date((existingUserData.createdAt as Timestamp).seconds * 1000)
+              : new Date(
+                  (existingUserData.createdAt as Timestamp).seconds * 1000
+                )
             : now,
           updatedAt: existingUserData.updatedAt
             ? existingUserData.updatedAt instanceof Date
               ? existingUserData.updatedAt
-              : new Date((existingUserData.updatedAt as Timestamp).seconds * 1000)
+              : new Date(
+                  (existingUserData.updatedAt as Timestamp).seconds * 1000
+                )
             : now,
         };
       }
@@ -323,7 +338,10 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
 
         userData.polarId = polarCustomerResult.id;
       } catch (error) {
-        console.error(`Failed to create Polar customer for new user ${userID}:`, error);
+        console.error(
+          `Failed to create Polar customer for new user ${userID}:`,
+          error
+        );
       }
 
       await createQuotaHistoryFromTier(userID, starterTierId, false);
@@ -331,7 +349,10 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       try {
         await sendVerificationEmail({ email: userRecord.email!, otp });
       } catch (error) {
-        console.error("[signupOrEnsureUser] Error sending verification email:", error);
+        console.error(
+          "[signupOrEnsureUser] Error sending verification email:",
+          error
+        );
       }
     }
 
@@ -373,7 +394,13 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     const action = isNewUser ? "Signup Successful" : "Login Successful";
     return res
       .status(200)
-      .json(newSuccessResponse(action, message, userData ? createSafeUserObject(userData) : null));
+      .json(
+        newSuccessResponse(
+          action,
+          message,
+          userData ? createSafeUserObject(userData) : null
+        )
+      );
   } catch (err) {
     console.error("Signup Error:", err);
     return res
@@ -418,17 +445,23 @@ export async function verifySession(req: Request, res: Response) {
         } catch (err) {
           return res
             .status(401)
-            .json(newErrorResponse("Unauthorized", "Invalid or expired token."));
+            .json(
+              newErrorResponse("Unauthorized", "Invalid or expired token.")
+            );
         }
       } else {
         return res
           .status(401)
-          .json(newErrorResponse("Unauthorized", "No session or token provided."));
+          .json(
+            newErrorResponse("Unauthorized", "No session or token provided.")
+          );
       }
     }
 
     const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", decodedUserInfo.uid).limit(1);
+    const userQuery = usersRef
+      .where("userId", "==", decodedUserInfo.uid)
+      .limit(1);
     const docs = await userQuery.get();
     const doc = docs.docs[0];
     if (!doc) {
@@ -474,7 +507,13 @@ export async function verifySession(req: Request, res: Response) {
 
     return res
       .status(200)
-      .json(newSuccessResponse("Session Valid", "Session is valid", createSafeUserObject(user)));
+      .json(
+        newSuccessResponse(
+          "Session Valid",
+          "Session is valid",
+          createSafeUserObject(user)
+        )
+      );
   } catch (err) {
     console.error("Verify Session Error:", err);
     return res
@@ -511,7 +550,10 @@ export async function logout(req: Request, res: Response) {
         const app = getFirebaseApp();
         const auth = getAuth(app);
 
-        const decodedToken = await auth.verifySessionCookie(sessionCookie, true);
+        const decodedToken = await auth.verifySessionCookie(
+          sessionCookie,
+          true
+        );
 
         await auth.revokeRefreshTokens(decodedToken.uid);
       } catch (err) {
@@ -521,7 +563,13 @@ export async function logout(req: Request, res: Response) {
 
     return res
       .status(200)
-      .json(newSuccessResponse("Logout Successful", "User logged out successfully", null));
+      .json(
+        newSuccessResponse(
+          "Logout Successful",
+          "User logged out successfully",
+          null
+        )
+      );
   } finally {
     closeFirebaseApp();
   }
@@ -557,10 +605,16 @@ export async function updateUsername(req: Request, res: Response) {
     if (!req.userID || !req.userEmail) {
       return res
         .status(401)
-        .json(newErrorResponse("Unauthorized", "You must be logged in to update your username."));
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to update your username."
+          )
+        );
     }
 
-    const isFirstTimeUser = !req.userDisplayName || req.userDisplayName.trim() === "";
+    const isFirstTimeUser =
+      !req.userDisplayName || req.userDisplayName.trim() === "";
     const now = new Date();
 
     const app = getFirebaseApp();
@@ -622,14 +676,20 @@ export async function updateUsername(req: Request, res: Response) {
         if (emailResult.success) {
           console.log(`Welcome email sent successfully to ${req.userEmail}`);
         } else {
-          console.error(`Failed to send welcome email to ${req.userEmail}:`, emailResult.error);
+          console.error(
+            `Failed to send welcome email to ${req.userEmail}:`,
+            emailResult.error
+          );
         }
       } catch (emailErr) {
         console.error("Error sending welcome email:", emailErr);
       }
 
       try {
-        const subscribeUserResult = await subscribeUser(username, req.userEmail);
+        const subscribeUserResult = await subscribeUser(
+          username,
+          req.userEmail
+        );
 
         if (subscribeUserResult.success && subscribeUserResult.data?.data?.id) {
           await userDoc.ref.update({
@@ -735,7 +795,12 @@ export async function updateProfile(req: Request, res: Response) {
     if (!req.userID) {
       return res
         .status(401)
-        .json(newErrorResponse("Unauthorized", "You must be logged in to update your profile."));
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to update your profile."
+          )
+        );
     }
 
     if (portfolio_link !== undefined) {
@@ -755,7 +820,10 @@ export async function updateProfile(req: Request, res: Response) {
     }
 
     if (professional_title !== undefined) {
-      if (typeof professional_title !== "string" || professional_title.length > 200) {
+      if (
+        typeof professional_title !== "string" ||
+        professional_title.length > 200
+      ) {
         return res
           .status(400)
           .json(
@@ -887,13 +955,23 @@ export async function verifyEmail(req: Request, res: Response) {
     if (!req.userID) {
       return res
         .status(401)
-        .json(newErrorResponse("Unauthorized", "You must be logged in to verify your email."));
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to verify your email."
+          )
+        );
     }
 
     if (!otp || typeof otp !== "string" || otp.length !== 6) {
       return res
         .status(400)
-        .json(newErrorResponse("Invalid OTP", "Please provide a valid 6-digit OTP code."));
+        .json(
+          newErrorResponse(
+            "Invalid OTP",
+            "Please provide a valid 6-digit OTP code."
+          )
+        );
     }
 
     const app = getFirebaseApp();
@@ -921,7 +999,12 @@ export async function verifyEmail(req: Request, res: Response) {
     if (userData.emailVerified === true) {
       return res
         .status(400)
-        .json(newErrorResponse("Already Verified", "Your email has already been verified."));
+        .json(
+          newErrorResponse(
+            "Already Verified",
+            "Your email has already been verified."
+          )
+        );
     }
 
     if (!userData.otp || userData.otp !== otp) {
@@ -945,7 +1028,10 @@ export async function verifyEmail(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse("OTP Expired", "The OTP code has expired. Please request a new one.")
+          newErrorResponse(
+            "OTP Expired",
+            "The OTP code has expired. Please request a new one."
+          )
         );
     }
 
@@ -1027,7 +1113,10 @@ export async function resendVerificationOTP(req: Request, res: Response) {
       return res
         .status(401)
         .json(
-          newErrorResponse("Unauthorized", "You must be logged in to request a verification code.")
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to request a verification code."
+          )
         );
     }
 
@@ -1055,7 +1144,12 @@ export async function resendVerificationOTP(req: Request, res: Response) {
     if (userData.emailVerified === true) {
       return res
         .status(400)
-        .json(newErrorResponse("Already Verified", "Your email has already been verified."));
+        .json(
+          newErrorResponse(
+            "Already Verified",
+            "Your email has already been verified."
+          )
+        );
     }
 
     try {
