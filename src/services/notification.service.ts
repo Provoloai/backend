@@ -21,15 +21,18 @@ export const broadcastToAll = async (
 
   const batch = db.batch();
   usersSnapshot.forEach((userDoc) => {
-    const newNotifRef = notificationsCollection.doc();
-    batch.set(newNotifRef, {
-      recipient: userDoc.id,
-      title,
-      message,
-      link: link || null,
-      read: false,
-      createdAt: new Date(),
-    });
+    const userData = userDoc.data();
+    if (userData?.userId) {
+      const newNotifRef = notificationsCollection.doc();
+      batch.set(newNotifRef, {
+        recipient: userData.userId,
+        title,
+        message,
+        link: link || null,
+        read: false,
+        createdAt: new Date(),
+      });
+    }
   });
 
   await batch.commit();
@@ -57,15 +60,19 @@ export const broadcastToTier = async (
 
   const batch = db.batch();
   usersSnapshot.forEach((userDoc) => {
-    const newNotifRef = notificationsCollection.doc();
-    batch.set(newNotifRef, {
-      recipient: userDoc.id,
-      title,
-      message,
-      link: link || null,
-      read: false,
-      createdAt: new Date(),
-    });
+    const userData = userDoc.data();
+    // Ensure the document has a userId before creating a notification
+    if (userData && userData.userId) {
+      const newNotifRef = notificationsCollection.doc();
+      batch.set(newNotifRef, {
+        recipient: userData.userId, // Correct: Use the userId from the document data
+        title,
+        message,
+        link: link || null,
+        read: false,
+        createdAt: new Date(),
+      });
+    }
   });
 
   await batch.commit();
