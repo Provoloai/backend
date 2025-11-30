@@ -1,3 +1,5 @@
+import { markAllNotificationsAsRead } from "../services/notification.service.ts";
+import { markNotificationAsRead } from "../services/notification.service.ts";
 import type { Response, Request } from "express";
 import {
   getUserNotifications,
@@ -129,6 +131,98 @@ export const deleteNotification = async (req: Request, res: Response) => {
         newErrorResponse(
           "Internal Server Error",
           "Failed to delete notification. Please try again later."
+        )
+      );
+  }
+};
+
+// PATCH /api/v1/notifications/read-all
+export const markAllNotificationsReadController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    if (!req.userID)
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
+
+    const count = await markAllNotificationsAsRead(req.userID);
+    res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Notifications Read",
+          `${count} notifications marked as read`,
+          { count }
+        )
+      );
+  } catch (error) {
+    console.error(
+      "[markAllNotificationsReadController] Error marking all notifications as read:",
+      error
+    );
+    res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "Failed to mark all notifications as read. Please try again later."
+        )
+      );
+  }
+};
+
+// PATCH /api/v1/notifications/:id/read
+export const markNotificationReadController = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    if (!req.userID)
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
+
+    const { id } = req.params;
+    if (!id) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse("Invalid Request", "Notification ID is required")
+        );
+    }
+    const wasMarked = await markNotificationAsRead(id, req.userID);
+    if (!wasMarked) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse(
+            "Not Found",
+            "Notification not found or access denied"
+          )
+        );
+    }
+    res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Notification Read",
+          "Notification marked as read",
+          null
+        )
+      );
+  } catch (error) {
+    console.error(
+      "[markNotificationReadController] Error marking notification as read:",
+      error
+    );
+    res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "Failed to mark notification as read. Please try again later."
         )
       );
   }

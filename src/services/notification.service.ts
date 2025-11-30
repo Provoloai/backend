@@ -143,3 +143,41 @@ export const deleteUserNotification = async (
   await notifRef.delete();
   return true;
 };
+
+// Marks all notifications as read for a user.
+export const markAllNotificationsAsRead = async (
+  userId: string
+): Promise<number> => {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  const notificationsCollection = db.collection("notifications");
+  const snapshot = await notificationsCollection
+    .where("recipient", "==", userId)
+    .where("read", "==", false)
+    .get();
+  if (snapshot.empty) return 0;
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.update(doc.ref, { read: true });
+  });
+  await batch.commit();
+  return snapshot.size;
+};
+
+// Marks a single notification as read for a user, ensuring ownership.
+export const markNotificationAsRead = async (
+  notificationId: string,
+  userId: string
+): Promise<boolean> => {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  const notifRef = db.collection("notifications").doc(notificationId);
+  const notifDoc = await notifRef.get();
+
+  if (!notifDoc.exists || notifDoc.data()?.recipient !== userId) {
+    return false;
+  }
+
+  await notifRef.update({ read: true });
+  return true;
+};
