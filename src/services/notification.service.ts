@@ -6,7 +6,8 @@ import type { Notification } from "../types/notification.d.ts";
 export const broadcastToAll = async (
   title: string,
   message: string,
-  link?: string
+  link?: string,
+  category: string = "system"
 ): Promise<void> => {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -30,6 +31,7 @@ export const broadcastToAll = async (
         message,
         link: link || null,
         read: false,
+        category,
         createdAt: new Date(),
       });
     }
@@ -43,7 +45,8 @@ export const broadcastToTier = async (
   tierSlug: string,
   title: string,
   message: string,
-  link?: string
+  link?: string,
+  category: string = "system"
 ): Promise<void> => {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -70,6 +73,7 @@ export const broadcastToTier = async (
         message,
         link: link || null,
         read: false,
+        category,
         createdAt: new Date(),
       });
     }

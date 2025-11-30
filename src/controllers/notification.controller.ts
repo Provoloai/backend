@@ -6,6 +6,8 @@ import {
   broadcastToTier,
 } from "../services/notification.service.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
+import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
+import { getFirestore } from "firebase-admin/firestore";
 
 // --- User-facing Controllers ---
 export const getMyNotifications = async (req: Request, res: Response) => {
@@ -28,16 +30,47 @@ export const getMyNotifications = async (req: Request, res: Response) => {
       options.startAfter = startAfter as string;
     }
 
-    const result = await getUserNotifications(req.userID, options);
-    res
-      .status(200)
-      .json(
-        newSuccessResponse(
-          "Notifications fetched successfully",
-          "Notifications retrieved",
-          result
-        )
-      );
+    // Get paginated notifications
+    const { notifications, lastVisibleId } = await getUserNotifications(
+      req.userID,
+      options
+    );
+
+    // Get total count
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+    const notificationsCollection = db.collection("notifications");
+    const totalSnapshot = await notificationsCollection
+      .where("recipient", "==", req.userID)
+      .get();
+    const totalCount = totalSnapshot.size;
+
+    // Calculate remaining pages
+    const pageSize = options.limit || 20;
+    const currentPage = options.startAfter
+      ? Math.floor(
+          totalSnapshot.docs.findIndex((doc) => doc.id === options.startAfter) /
+            pageSize
+        ) + 2
+      : 1;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const remainingPages = totalPages - currentPage;
+
+    res.status(200).json(
+      newSuccessResponse(
+        "Notifications fetched successfully",
+        "Notifications retrieved",
+        {
+          notifications,
+          lastVisibleId,
+          totalCount,
+          pageSize,
+          currentPage,
+          totalPages,
+          remainingPages,
+        }
+      )
+    );
   } catch (error) {
     console.error("[getMyNotifications] Error fetching notifications:", error);
     res
@@ -104,7 +137,7 @@ export const deleteNotification = async (req: Request, res: Response) => {
 // --- Admin Broadcast Controllers ---
 export const broadcastToAllUsers = async (req: Request, res: Response) => {
   try {
-    const { title, message, link } = req.body;
+    const { title, message, link, category } = req.body;
     if (!title || !message) {
       return res
         .status(400)
@@ -113,7 +146,7 @@ export const broadcastToAllUsers = async (req: Request, res: Response) => {
         );
     }
 
-    await broadcastToAll(title, message, link);
+    await broadcastToAll(title, message, link, category);
     res
       .status(202)
       .json(
@@ -138,7 +171,7 @@ export const broadcastToTierController = async (
 ) => {
   try {
     const { tierSlug } = req.params;
-    const { title, message, link } = req.body;
+    const { title, message, link, category } = req.body;
 
     if (!tierSlug) {
       return res
@@ -156,7 +189,7 @@ export const broadcastToTierController = async (
         );
     }
 
-    await broadcastToTier(tierSlug, title, message, link);
+    await broadcastToTier(tierSlug, title, message, link, category);
     res
       .status(202)
       .json(

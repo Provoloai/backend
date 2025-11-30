@@ -43,19 +43,24 @@ const notificationRouter: ExpressRouter = Router();
  *               title: "Notifications fetched successfully"
  *               message: "Notifications retrieved"
  *               status: "success"
- *               data: {
- *                 "notifications": [
+ *               data:
+ *                 notifications: [
  *                   {
- *                     "id": "notif_123",
- *                     "recipient": "user_abc",
- *                     "title": "Welcome!",
- *                     "message": "Thanks for signing up.",
- *                     "read": false,
- *                     "createdAt": "2024-01-01T00:00:00.000Z"
+ *                     id: "notif_123",
+ *                     recipient: "user_abc",
+ *                     title: "Welcome!",
+ *                     message: "Thanks for signing up.",
+ *                     read: false,
+ *                     category: "system",
+ *                     createdAt: "2024-01-01T00:00:00.000Z"
  *                   }
- *                 ],
- *                 "lastVisibleId": "notif_123"
- *               }
+ *                 ]
+ *                 lastVisibleId: "notif_123"
+ *                 totalCount: 100
+ *                 pageSize: 20
+ *                 currentPage: 1
+ *                 totalPages: 5
+ *                 remainingPages: 4
  *       401:
  *         description: Unauthorized.
  */
@@ -114,6 +119,10 @@ notificationRouter.delete("/:id", authMiddleware, deleteNotification);
  *                 type: string
  *               link:
  *                 type: string
+ *               category:
+ *                 type: string
+ *                 enum: ["system", "user", "promotion", "admin", "other"]
+ *                 description: The category/type of notification.
  *             required:
  *               - title
  *               - message
@@ -121,6 +130,7 @@ notificationRouter.delete("/:id", authMiddleware, deleteNotification);
  *               title: "System Maintenance"
  *               message: "We will be undergoing scheduled maintenance this Sunday."
  *               link: "/status"
+ *               category: "system"
  *     responses:
  *       202:
  *         description: Broadcast to all users has been initiated.
@@ -168,6 +178,10 @@ notificationRouter.post(
  *                 type: string
  *               link:
  *                 type: string
+ *               category:
+ *                 type: string
+ *                 enum: ["system", "user", "promotion", "admin", "other"]
+ *                 description: The category/type of notification.
  *             required:
  *               - title
  *               - message
@@ -175,6 +189,7 @@ notificationRouter.post(
  *               title: "New Feature for Premium Users"
  *               message: "You can now access the new AI-powered analytics dashboard!"
  *               link: "/dashboard"
+ *               category: "promotion"
  *     responses:
  *       202:
  *         description: Broadcast to the specified tier has been initiated.
