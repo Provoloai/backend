@@ -144,7 +144,24 @@ export async function login(req: Request, res: Response) {
         );
     }
 
+    const firebaseProvider = token.firebase.sign_in_provider;
+    const currentProvider =
+      firebaseProvider === "password"
+        ? "email"
+        : firebaseProvider === "google.com"
+        ? "google"
+        : firebaseProvider;
+
     const data = doc.data();
+    const providers = data.providers || [];
+    if (!providers.includes(currentProvider)) {
+      await doc.ref.update({
+        providers: [...providers, currentProvider],
+        updatedAt: new Date(),
+      });
+      providers.push(currentProvider);
+    }
+
     const emailVerified = data.emailVerified === true;
     const user: User = {
       id: doc.id,
@@ -163,6 +180,7 @@ export async function login(req: Request, res: Response) {
           ? data.otpExpires
           : new Date((data.otpExpires as Timestamp).seconds * 1000)
         : null,
+      providers,
       createdAt: data.createdAt
         ? data.createdAt instanceof Date
           ? data.createdAt
@@ -261,6 +279,24 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       if (existingUserDoc) {
         const existingUserData: User = existingUserDoc.data() as User;
         const emailVerified = existingUserData.emailVerified === true;
+
+        const firebaseProvider = decodedUserInfo.firebase.sign_in_provider;
+        const currentProvider =
+          firebaseProvider === "password"
+            ? "email"
+            : firebaseProvider === "google.com"
+            ? "google"
+            : firebaseProvider;
+
+        const providers = existingUserData.providers || [];
+        if (!providers.includes(currentProvider)) {
+          await existingUserDoc.ref.update({
+            providers: [...providers, currentProvider],
+            updatedAt: now,
+          });
+          providers.push(currentProvider);
+        }
+
         userData = {
           id: existingUserDoc.id,
           userId: userID,
@@ -280,6 +316,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
                   (existingUserData.otpExpires as Timestamp).seconds * 1000
                 )
             : null,
+          providers,
           createdAt: existingUserData.createdAt
             ? existingUserData.createdAt instanceof Date
               ? existingUserData.createdAt
@@ -302,6 +339,14 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       const otp = generateOTP();
       const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
 
+      const firebaseProvider = decodedUserInfo.firebase.sign_in_provider;
+      const currentProvider =
+        firebaseProvider === "password"
+          ? "email"
+          : firebaseProvider === "google.com"
+          ? "google"
+          : firebaseProvider;
+
       const newUserData: NewUser = {
         userId: userID,
         email: userRecord.email!,
@@ -314,6 +359,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         emailVerified: false,
         otp,
         otpExpires,
+        providers: [currentProvider],
         createdAt: now,
         updatedAt: now,
       };
@@ -493,6 +539,7 @@ export async function verifySession(req: Request, res: Response) {
           ? data.otpExpires
           : new Date((data.otpExpires as Timestamp).seconds * 1000)
         : null,
+      providers: data.providers || [],
       createdAt: data.createdAt
         ? data.createdAt instanceof Date
           ? data.createdAt
@@ -739,6 +786,7 @@ export async function updateUsername(req: Request, res: Response) {
             ? userData.otpExpires
             : new Date((userData.otpExpires as Timestamp).seconds * 1000)
           : null,
+        providers: userData.providers || [],
         createdAt: userData.createdAt
           ? userData.createdAt instanceof Date
             ? userData.createdAt
@@ -911,6 +959,7 @@ export async function updateProfile(req: Request, res: Response) {
           ? userData.otpExpires
           : new Date((userData.otpExpires as Timestamp).seconds * 1000)
         : null,
+      providers: userData.providers || [],
       createdAt: userData.createdAt
         ? userData.createdAt instanceof Date
           ? userData.createdAt
@@ -1070,6 +1119,7 @@ export async function verifyEmail(req: Request, res: Response) {
       emailVerified: true,
       otp: null,
       otpExpires: null,
+      providers: updatedData.providers || [],
       createdAt: updatedData.createdAt
         ? updatedData.createdAt instanceof Date
           ? updatedData.createdAt
