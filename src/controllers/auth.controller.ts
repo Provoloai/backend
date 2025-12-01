@@ -804,19 +804,18 @@ export async function updateUsername(req: Request, res: Response) {
         .json(
           newSuccessResponse(
             "Username Updated",
-            "Username updated successfully. Please log in again to refresh your session with the new username.",
+            "Your username has been updated successfully.",
             createSafeUserObject(user)
           )
         );
-    } catch (userErr) {
-      console.error("Error getting updated user data:", userErr);
+    } catch (err) {
+      console.error("Update Username Error:", err);
       return res
-        .status(200)
+        .status(500)
         .json(
-          newSuccessResponse(
-            "Username Updated",
-            "Username updated successfully. Please log in again to refresh your session.",
-            null
+          newErrorResponse(
+            "Update Failed",
+            "Unable to update your username. Please contact support."
           )
         );
     }
@@ -826,12 +825,111 @@ export async function updateUsername(req: Request, res: Response) {
       .status(500)
       .json(
         newErrorResponse(
-          "Update Username Error",
-          "Unable to update your username. Please contact support if this continues."
+          "Update Failed",
+          "Unable to update your username. Please contact support."
         )
       );
-  } finally {
-    closeFirebaseApp();
+  }
+}
+
+export async function updateProviders(req: Request, res: Response) {
+  try {
+    const { providers } = req.body;
+
+    if (
+      !Array.isArray(providers) ||
+      !providers.every((p) => typeof p === "string")
+    ) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Providers must be an array of strings."
+          )
+        );
+    }
+
+    if (!req.userID) {
+      return res
+        .status(401)
+        .json(
+          newErrorResponse(
+            "Unauthorized",
+            "You must be logged in to update your providers."
+          )
+        );
+    }
+
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+    const usersRef = db.collection("users");
+    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
+    const docs = await userQuery.get();
+
+    if (docs.empty || !docs.docs[0]) {
+      return res
+        .status(404)
+        .json(
+          newErrorResponse(
+            "User Not Found",
+            "Your user record could not be found. Please contact support."
+          )
+        );
+    }
+
+    const userDoc = docs.docs[0];
+    await userDoc.ref.update({
+      providers,
+      updatedAt: new Date(),
+    });
+
+    const userData = userDoc.data();
+    const user: User = {
+      id: userDoc.id,
+      userId: userData.userId,
+      email: userData.email,
+      displayName: userData.displayName || null,
+      tierId: userData.tierId,
+      polarId: userData.polarId || null,
+      mailerliteId: userData.mailerliteId || null,
+      portfolioLink: userData.portfolioLink || null,
+      professionalTitle: userData.professionalTitle || null,
+      emailVerified: userData.emailVerified === true,
+      otp: userData.otp || null,
+      otpExpires: userData.otpExpires
+        ? userData.otpExpires instanceof Date
+          ? userData.otpExpires
+          : new Date((userData.otpExpires as Timestamp).seconds * 1000)
+        : null,
+      providers, // Use the updated providers
+      createdAt: userData.createdAt
+        ? userData.createdAt instanceof Date
+          ? userData.createdAt
+          : new Date((userData.createdAt as Timestamp).seconds * 1000)
+        : undefined,
+      updatedAt: new Date(), // Use the new update time
+    };
+
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse(
+          "Providers Updated",
+          "Your authentication providers have been updated successfully.",
+          createSafeUserObject(user)
+        )
+      );
+  } catch (err) {
+    console.error("Update Providers Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Update Failed",
+          "Unable to update your providers. Please contact support."
+        )
+      );
   }
 }
 
