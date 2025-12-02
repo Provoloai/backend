@@ -65,7 +65,7 @@ export async function callGemini(
       console.log(`[callGemini] Attempt ${attempt}/${maxRetries + 1}`);
 
       const response = await gemini.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash-lite",
         contents: [
           { role: "user", parts: [{ text: systemInstruction }] },
           { role: "user", parts: [{ text: prompt }] },
