@@ -24,7 +24,10 @@ import {
 import { updateUserQuota, checkUserQuota } from "../utils/quota.utils.ts";
 import type { FeatureSlug } from "../types/tiers.ts";
 import { callGemini } from "../utils/geminiClient.ts";
-import { SystemOverrideError, ValidationError } from "../utils/responseValidator.ts";
+import {
+  SystemOverrideError,
+  ValidationError,
+} from "../utils/responseValidator.ts";
 import { newErrorResponse, newSuccessResponse } from "../utils/apiResponse.ts";
 import type {
   ProposalReq,
@@ -37,6 +40,8 @@ import type {
 import { getFirestore } from "firebase-admin/firestore";
 import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
 import type { OptimizerType } from "../types/optimizer-history.ts";
+import { sendNotificationToUser } from "../services/notification.service.ts";
+import { NotificationCategory } from "../types/notification.ts";
 
 // Helper function to get user profile data (displayName, portfolioLink, professionalTitle) in one DB call
 async function getUserProfileData(
@@ -53,7 +58,11 @@ async function getUserProfileData(
     try {
       const app = getFirebaseApp();
       const db = getFirestore(app);
-      const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+      const userSnap = await db
+        .collection("users")
+        .where("userId", "==", userId)
+        .limit(1)
+        .get();
 
       if (!userSnap.empty && userSnap.docs[0]) {
         const userData = userSnap.docs[0].data();
@@ -65,7 +74,10 @@ async function getUserProfileData(
         };
       }
     } catch (err) {
-      console.error("[getUserProfileData] Error fetching user profile data:", err);
+      console.error(
+        "[getUserProfileData] Error fetching user profile data:",
+        err
+      );
     }
     return {
       displayName: tokenDisplayName,
@@ -79,7 +91,11 @@ async function getUserProfileData(
   try {
     const app = getFirebaseApp();
     const db = getFirestore(app);
-    const userSnap = await db.collection("users").where("userId", "==", userId).limit(1).get();
+    const userSnap = await db
+      .collection("users")
+      .where("userId", "==", userId)
+      .limit(1)
+      .get();
 
     if (!userSnap.empty && userSnap.docs[0]) {
       const userData = userSnap.docs[0].data();
@@ -91,7 +107,10 @@ async function getUserProfileData(
       };
     }
   } catch (err) {
-    console.error("[getUserProfileData] Error fetching user profile data:", err);
+    console.error(
+      "[getUserProfileData] Error fetching user profile data:",
+      err
+    );
   }
 
   return {
@@ -113,7 +132,9 @@ export async function optimizeProfile(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Validate input first (fast, no DB calls)
@@ -128,10 +149,19 @@ export async function optimizeProfile(req: Request, res: Response) {
           )
         );
     }
-    if (full_name.length > 100 || professional_title.length > 200 || profile.length > 5000) {
+    if (
+      full_name.length > 100 ||
+      professional_title.length > 200 ||
+      profile.length > 5000
+    ) {
       return res
         .status(400)
-        .json(newErrorResponse("Validation Error", "Input fields exceed allowed length."));
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
     }
 
     // 3. Check quota
@@ -151,7 +181,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         );
     }
     if (!quotaResult.allowed) {
-      const limitText = quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
+      const limitText =
+        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
       return res
         .status(429)
         .json(
@@ -206,7 +237,8 @@ export async function optimizeProfile(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
@@ -254,6 +286,25 @@ export async function optimizeProfile(req: Request, res: Response) {
       const userTierId = profileData?.tierId || null;
 
       if (userTierId && userTierId !== starterTierId) {
+        // Check for first optimization milestone
+        try {
+          const history = await getUserOptimizerHistory(userId, 1, 1);
+          if (history.total === 0) {
+            await sendNotificationToUser(
+              userId,
+              "Milestone Unlocked: First Optimization!",
+              "You've just optimized your first profile. You're a step closer to your goal!",
+              "/optimizer",
+              NotificationCategory.ACHIEVEMENT
+            );
+          }
+        } catch (err) {
+          console.error(
+            "Error checking/sending first optimization notification:",
+            err
+          );
+        }
+
         // premium user - store optimizer history
         storeOptimizerHistory({
           userId,
@@ -274,7 +325,10 @@ export async function optimizeProfile(req: Request, res: Response) {
         );
       }
     } catch (err) {
-      console.warn("Failed to check user tier before storing optimizer history", err);
+      console.warn(
+        "Failed to check user tier before storing optimizer history",
+        err
+      );
     }
 
     // 9. Return success immediately (quota + history storing continue in background)
@@ -306,7 +360,9 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Validate input first (fast, no DB calls)
@@ -321,10 +377,19 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
           )
         );
     }
-    if (full_name.length > 100 || professional_title.length > 200 || profile.length > 5000) {
+    if (
+      full_name.length > 100 ||
+      professional_title.length > 200 ||
+      profile.length > 5000
+    ) {
       return res
         .status(400)
-        .json(newErrorResponse("Validation Error", "Input fields exceed allowed length."));
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
     }
 
     // 3. Check quota
@@ -344,7 +409,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         );
     }
     if (!quotaResult.allowed) {
-      const limitText = quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
+      const limitText =
+        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
       return res
         .status(429)
         .json(
@@ -366,7 +432,10 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
     // 5. Call AI model (replace with your actual AI call)
     let aiResponseText = "";
     try {
-      aiResponseText = await callGemini(content, linkedinOptimizerSystemInstruction());
+      aiResponseText = await callGemini(
+        content,
+        linkedinOptimizerSystemInstruction()
+      );
     } catch (err: any) {
       console.error("[optimizeLinkedIn] AI service call failed:", err);
 
@@ -399,7 +468,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
@@ -441,18 +511,56 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
     });
 
     // 8. Store optimization history (fire and forget)
-    storeOptimizerHistory({
-      userId,
-      optimizerType: "linkedin",
-      originalInput: {
-        fullName: sanitizedFullName,
-        professionalTitle: sanitizedTitle,
-        content: sanitizedProfile,
-      },
-      response: parsedResponse,
-    }).catch((err) => {
-      console.warn("Failed to store optimizer history (linkedin)", err);
-    });
+    // Only for premium users
+    try {
+      const profileData = await getUserProfileData(userId, req.userDisplayName);
+      const starterTierId = process.env.STARTER_TIER_ID || "starter";
+      const userTierId = profileData?.tierId || null;
+
+      if (userTierId && userTierId !== starterTierId) {
+        // Check for first optimization milestone (using getUserOptimizerHistory which is already imported)
+        try {
+          const history = await getUserOptimizerHistory(userId, 1, 1);
+          if (history.total === 0) {
+            await sendNotificationToUser(
+              userId,
+              "Milestone Unlocked: First Optimization!",
+              "You've just optimized your first profile. You're a step closer to your goal!",
+              "/optimizer",
+              NotificationCategory.ACHIEVEMENT
+            );
+          }
+        } catch (err) {
+          console.error(
+            "Error checking/sending first optimization notification:",
+            err
+          );
+        }
+
+        storeOptimizerHistory({
+          userId,
+          optimizerType: "linkedin",
+          originalInput: {
+            fullName: sanitizedFullName,
+            professionalTitle: sanitizedTitle,
+            content: sanitizedProfile,
+          },
+          response: parsedResponse,
+        }).catch((err) => {
+          console.warn("Failed to store optimizer history (linkedin)", err);
+        });
+      } else {
+        // non-premium - skip storing history
+        console.debug(
+          `[optimizeLinkedIn] Skipping optimizer history store for user ${userId} with tier ${userTierId}`
+        );
+      }
+    } catch (err) {
+      console.warn(
+        "Failed to check user tier before storing optimizer history (linkedin)",
+        err
+      );
+    }
 
     // 9. Return success immediately (quota update continues in background)
     return res
@@ -483,7 +591,9 @@ export async function getOptimizerHistory(req: Request, res: Response) {
   try {
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     const {
@@ -503,7 +613,12 @@ export async function getOptimizerHistory(req: Request, res: Response) {
     if (pageNum < 1 || limitNum < 1 || limitNum > 50) {
       return res
         .status(400)
-        .json(newErrorResponse("Invalid Request", "Page must be >=1 and limit between 1 and 50"));
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Page must be >=1 and limit between 1 and 50"
+          )
+        );
     }
 
     const result = await getUserOptimizerHistory(
@@ -533,61 +648,95 @@ export async function getOptimizerHistory(req: Request, res: Response) {
     console.error("[getOptimizerHistory] Error", err);
     return res
       .status(500)
-      .json(newErrorResponse("Internal Server Error", "Failed to retrieve optimizer history"));
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "Failed to retrieve optimizer history"
+        )
+      );
   }
 }
 
 // Get single optimizer history record
-export async function getOptimizerHistoryByIdController(req: Request, res: Response) {
+export async function getOptimizerHistoryByIdController(
+  req: Request,
+  res: Response
+) {
   try {
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
     const { recordId } = req.params;
     if (!recordId) {
-      return res.status(400).json(newErrorResponse("Invalid Request", "Record ID is required"));
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Record ID is required"));
     }
     const record = await getOptimizerHistoryById(userId, recordId);
     if (!record) {
       return res
         .status(404)
-        .json(newErrorResponse("Not Found", "Record not found or access denied"));
+        .json(
+          newErrorResponse("Not Found", "Record not found or access denied")
+        );
     }
     return res
       .status(200)
       .json(
-        newSuccessResponse("Record Retrieved", "Optimizer record retrieved successfully", record)
+        newSuccessResponse(
+          "Record Retrieved",
+          "Optimizer record retrieved successfully",
+          record
+        )
       );
   } catch (err) {
     console.error("[getOptimizerHistoryByIdController] Error", err);
     return res
       .status(500)
-      .json(newErrorResponse("Internal Server Error", "Failed to retrieve optimizer record"));
+      .json(
+        newErrorResponse(
+          "Internal Server Error",
+          "Failed to retrieve optimizer record"
+        )
+      );
   }
 }
 
 // Cron cleanup for optimizer history
-export async function cleanupOldOptimizerHistoryController(req: Request, res: Response) {
+export async function cleanupOldOptimizerHistoryController(
+  req: Request,
+  res: Response
+) {
   try {
     const secret = process.env.CRON_SECRET;
     if (secret) {
       const provided = req.headers["x-cron-secret"] as string | undefined;
       if (!provided || provided !== secret) {
-        return res.status(401).json(newErrorResponse("Unauthorized", "Invalid cron secret"));
+        return res
+          .status(401)
+          .json(newErrorResponse("Unauthorized", "Invalid cron secret"));
       }
     }
     const deleted = await cleanupOldOptimizerHistory(30);
     return res.status(200).json(
-      newSuccessResponse("Cleanup Completed", "Deleted optimizer history older than 30 days", {
-        deleted,
-      })
+      newSuccessResponse(
+        "Cleanup Completed",
+        "Deleted optimizer history older than 30 days",
+        {
+          deleted,
+        }
+      )
     );
   } catch (err) {
     console.error("[cleanupOldOptimizerHistoryController] Error", err);
     return res
       .status(500)
-      .json(newErrorResponse("Internal Server Error", "Optimizer cleanup failed"));
+      .json(
+        newErrorResponse("Internal Server Error", "Optimizer cleanup failed")
+      );
   }
 }
 
@@ -596,11 +745,14 @@ export async function generateProposal(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Validate input first (fast, no DB calls)
-    const { client_name, job_title, proposal_tone, job_summary } = req.body as ProposalReq;
+    const { client_name, job_title, proposal_tone, job_summary } =
+      req.body as ProposalReq;
     if (!client_name || !job_title || !proposal_tone || !job_summary) {
       return res
         .status(400)
@@ -611,10 +763,19 @@ export async function generateProposal(req: Request, res: Response) {
           )
         );
     }
-    if (client_name.length > 100 || job_title.length > 200 || job_summary.length > 2000) {
+    if (
+      client_name.length > 100 ||
+      job_title.length > 200 ||
+      job_summary.length > 2000
+    ) {
       return res
         .status(400)
-        .json(newErrorResponse("Validation Error", "Input fields exceed allowed length."));
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "Input fields exceed allowed length."
+          )
+        );
     }
     const validTones = ["professional", "conversational", "confident", "calm"];
     if (!validTones.includes(proposal_tone)) {
@@ -637,7 +798,10 @@ export async function generateProposal(req: Request, res: Response) {
         getUserProfileData(userId, req.userDisplayName),
       ]);
     } catch (err: any) {
-      console.error("[generateProposal] Quota check or profile fetch error:", err);
+      console.error(
+        "[generateProposal] Quota check or profile fetch error:",
+        err
+      );
       return res
         .status(500)
         .json(
@@ -649,7 +813,8 @@ export async function generateProposal(req: Request, res: Response) {
     }
 
     if (!quotaResult.allowed) {
-      const limitText = quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
+      const limitText =
+        quotaResult.limit === -1 ? "unlimited" : quotaResult.limit.toString();
       return res
         .status(429)
         .json(
@@ -710,7 +875,8 @@ export async function generateProposal(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
@@ -771,7 +937,8 @@ export async function generateProposal(req: Request, res: Response) {
             .json(
               newErrorResponse(
                 "AI Error",
-                parsedResponse.message || "The AI service encountered an error. Please try again."
+                parsedResponse.message ||
+                  "The AI service encountered an error. Please try again."
               )
             );
         }
@@ -827,6 +994,23 @@ export async function generateProposal(req: Request, res: Response) {
     );
 
     // 7. Store proposal history and update quota in parallel (non-blocking for response)
+
+    // Check for first proposal milestone
+    try {
+      const history = await getUserProposalHistory(userId, 1, 1);
+      if (history.total === 0) {
+        await sendNotificationToUser(
+          userId,
+          "Milestone Unlocked: First Proposal!",
+          "You've successfully generated your first proposal. Start pitching the right way!",
+          "/proposal",
+          NotificationCategory.ACHIEVEMENT
+        );
+      }
+    } catch (err) {
+      console.error("Error checking/sending first proposal notification:", err);
+    }
+
     // Start both operations but don't wait for quota update
     const storePromise = storeProposalHistory(
       userId,
@@ -838,7 +1022,11 @@ export async function generateProposal(req: Request, res: Response) {
       },
       proposalResponse
     ).catch((err) => {
-      console.warn("Warning: Failed to store proposal history for user", userId, err);
+      console.warn(
+        "Warning: Failed to store proposal history for user",
+        userId,
+        err
+      );
       return undefined;
     });
 
@@ -883,7 +1071,9 @@ export async function getProposalHistory(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Parse query parameters
@@ -896,12 +1086,20 @@ export async function getProposalHistory(req: Request, res: Response) {
       return res
         .status(400)
         .json(
-          newErrorResponse("Invalid Request", "Page must be >= 1, limit must be between 1 and 50")
+          newErrorResponse(
+            "Invalid Request",
+            "Page must be >= 1, limit must be between 1 and 50"
+          )
         );
     }
 
     // 4. Get proposal history with optional search
-    const result = await getUserProposalHistory(userId, pageNum, limitNum, search);
+    const result = await getUserProposalHistory(
+      userId,
+      pageNum,
+      limitNum,
+      search
+    );
 
     // 5. Return success
     return res.status(200).json(
@@ -938,13 +1136,17 @@ export async function getProposalByIdController(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Get proposal ID from params
     const { proposalId } = req.params;
     if (!proposalId) {
-      return res.status(400).json(newErrorResponse("Invalid Request", "Proposal ID is required"));
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Proposal ID is required"));
     }
 
     // 3. Get proposal by ID
@@ -952,14 +1154,20 @@ export async function getProposalByIdController(req: Request, res: Response) {
     if (!proposal) {
       return res
         .status(404)
-        .json(newErrorResponse("Not Found", "Proposal not found or access denied"));
+        .json(
+          newErrorResponse("Not Found", "Proposal not found or access denied")
+        );
     }
 
     // 4. Return success
     return res
       .status(200)
       .json(
-        newSuccessResponse("Proposal Retrieved", "AI proposal retrieved successfully", proposal)
+        newSuccessResponse(
+          "Proposal Retrieved",
+          "AI proposal retrieved successfully",
+          proposal
+        )
       );
   } catch (err) {
     console.error("[getProposalByIdController] Error:", err);
@@ -979,16 +1187,24 @@ export async function refineProposal(req: Request, res: Response) {
     // 1. Auth check
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Validate input
-    const { proposalId, refinementType, newTone } = req.body as RefineProposalReq;
+    const { proposalId, refinementType, newTone } =
+      req.body as RefineProposalReq;
 
     if (!proposalId || !refinementType) {
       return res
         .status(400)
-        .json(newErrorResponse("Invalid Request", "Missing proposalId or refinementType"));
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Missing proposalId or refinementType"
+          )
+        );
     }
 
     const validRefinementTypes: RefinementAction[] = [
@@ -1000,30 +1216,40 @@ export async function refineProposal(req: Request, res: Response) {
     ];
 
     if (!validRefinementTypes.includes(refinementType)) {
-      return res.status(400).json(newErrorResponse("Invalid Request", "Invalid refinement type"));
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Invalid refinement type"));
     }
 
     // Change tone requires newTone
     if (refinementType === "change_tone" && !newTone) {
       return res
         .status(400)
-        .json(newErrorResponse("Invalid Request", "newTone required for change_tone refinement"));
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "newTone required for change_tone refinement"
+          )
+        );
     }
 
     // 3. Get proposal details
     const proposal = await getProposalById(userId, proposalId);
     if (!proposal) {
-      return res.status(404).json(newErrorResponse("Not Found", "Proposal not found"));
+      return res
+        .status(404)
+        .json(newErrorResponse("Not Found", "Proposal not found"));
     }
 
     // 4. Get latest version (could be refined already)
-    const { proposal: currentProposal, refinementOrder } = await getLatestProposalVersion(
-      proposalId,
-      userId
-    );
+    const { proposal: currentProposal, refinementOrder } =
+      await getLatestProposalVersion(proposalId, userId);
 
     // 4a. Get user profile data (displayName, portfolioLink)
-    const { displayName, portfolioLink } = await getUserProfileData(userId, req.userDisplayName);
+    const { displayName, portfolioLink } = await getUserProfileData(
+      userId,
+      req.userDisplayName
+    );
 
     // 5. Call AI for refinement
     const prompt = refineProposalPrompt(
@@ -1037,7 +1263,10 @@ export async function refineProposal(req: Request, res: Response) {
 
     let aiResponseText = "";
     try {
-      aiResponseText = await callGemini(prompt, refineProposalSystemInstruction());
+      aiResponseText = await callGemini(
+        prompt,
+        refineProposalSystemInstruction()
+      );
     } catch (err: any) {
       console.error("[refineProposal] AI call failed:", err);
 
@@ -1070,14 +1299,20 @@ export async function refineProposal(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Validation Error",
-              err.message || "Invalid request. Please check your input and try again."
+              err.message ||
+                "Invalid request. Please check your input and try again."
             )
           );
       }
 
       return res
         .status(500)
-        .json(newErrorResponse("AI Service Error", "Failed to refine proposal. Please try again."));
+        .json(
+          newErrorResponse(
+            "AI Service Error",
+            "Failed to refine proposal. Please try again."
+          )
+        );
     }
 
     // 6. Parse AI response
@@ -1088,7 +1323,12 @@ export async function refineProposal(req: Request, res: Response) {
       console.error("[refineProposal] JSON parse failed:", err);
       return res
         .status(500)
-        .json(newErrorResponse("Processing Error", "Failed to process refined proposal."));
+        .json(
+          newErrorResponse(
+            "Processing Error",
+            "Failed to process refined proposal."
+          )
+        );
     }
 
     // 6.5. Validate and create MDX content
@@ -1114,37 +1354,55 @@ export async function refineProposal(req: Request, res: Response) {
     return res
       .status(200)
       .json(
-        newSuccessResponse("Proposal Refined", "Proposal refined successfully", refinedProposal)
+        newSuccessResponse(
+          "Proposal Refined",
+          "Proposal refined successfully",
+          refinedProposal
+        )
       );
   } catch (err) {
     console.error("[refineProposal] Error:", err);
     return res
       .status(500)
       .json(
-        newErrorResponse("Internal Server Error", "An error occurred while refining the proposal.")
+        newErrorResponse(
+          "Internal Server Error",
+          "An error occurred while refining the proposal."
+        )
       );
   }
 }
 
 // Get all versions of a proposal
-export async function getProposalVersionsController(req: Request, res: Response) {
+export async function getProposalVersionsController(
+  req: Request,
+  res: Response
+) {
   try {
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     const { proposalId } = req.params;
     if (!proposalId) {
-      return res.status(400).json(newErrorResponse("Invalid Request", "Proposal ID is required"));
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "Proposal ID is required"));
     }
 
     const versions = await getProposalVersions(proposalId, userId);
 
     return res.status(200).json(
-      newSuccessResponse("Versions Retrieved", "Proposal versions retrieved successfully", {
-        versions,
-      })
+      newSuccessResponse(
+        "Versions Retrieved",
+        "Proposal versions retrieved successfully",
+        {
+          versions,
+        }
+      )
     );
   } catch (err) {
     console.error("[getProposalVersionsController] Error:", err);
@@ -1169,7 +1427,9 @@ export async function cleanupOldProposalHistory(req: Request, res: Response) {
     if (secret) {
       const provided = req.headers["x-cron-secret"] as string | undefined;
       if (!provided || provided !== secret) {
-        return res.status(401).json(newErrorResponse("Unauthorized", "Invalid cron secret"));
+        return res
+          .status(401)
+          .json(newErrorResponse("Unauthorized", "Invalid cron secret"));
       }
     }
 
@@ -1197,14 +1457,20 @@ export async function cleanupOldProposalHistory(req: Request, res: Response) {
     }
 
     return res.status(200).json(
-      newSuccessResponse("Cleanup Completed", "Deleted proposal history older than 30 days", {
-        deleted,
-        cutoff: cutoff.toISOString(),
-      })
+      newSuccessResponse(
+        "Cleanup Completed",
+        "Deleted proposal history older than 30 days",
+        {
+          deleted,
+          cutoff: cutoff.toISOString(),
+        }
+      )
     );
   } catch (err) {
     console.error("[cleanupOldProposalHistory] Error:", err);
-    return res.status(500).json(newErrorResponse("Internal Server Error", "Cleanup failed"));
+    return res
+      .status(500)
+      .json(newErrorResponse("Internal Server Error", "Cleanup failed"));
   }
 }
 
@@ -1214,7 +1480,9 @@ export async function getUserQuota(req: Request, res: Response) {
     // 1. Get user ID from auth middleware
     const userId = req.userID as string;
     if (!userId) {
-      return res.status(401).json(newErrorResponse("Unauthorized", "User not authenticated"));
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "User not authenticated"));
     }
 
     // 2. Get quota slug from query parameter
@@ -1222,7 +1490,12 @@ export async function getUserQuota(req: Request, res: Response) {
     if (!quota) {
       return res
         .status(400)
-        .json(newErrorResponse("Invalid Request", "Missing required query parameter: quota"));
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "Missing required query parameter: quota"
+          )
+        );
     }
 
     // 3. Validate quota slug
@@ -1266,13 +1539,19 @@ export async function getUserQuota(req: Request, res: Response) {
 
     // 5. Return quota information
     return res.status(200).json(
-      newSuccessResponse("Quota Retrieved", "User quota information retrieved successfully", {
-        quota: quota,
-        count: quotaResult.count,
-        limit: quotaResult.limit,
-        remaining:
-          quotaResult.limit === -1 ? -1 : Math.max(0, quotaResult.limit - quotaResult.count),
-      })
+      newSuccessResponse(
+        "Quota Retrieved",
+        "User quota information retrieved successfully",
+        {
+          quota: quota,
+          count: quotaResult.count,
+          limit: quotaResult.limit,
+          remaining:
+            quotaResult.limit === -1
+              ? -1
+              : Math.max(0, quotaResult.limit - quotaResult.count),
+        }
+      )
     );
   } catch (err) {
     console.error("[getUserQuota] Unhandled error:", err);

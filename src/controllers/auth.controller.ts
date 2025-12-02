@@ -11,11 +11,13 @@ import {
   sendVerificationEmail,
 } from "../services/mail.service.ts";
 import { subscribeUser } from "../services/mailerlite.service.ts";
+import { sendNotificationToUser } from "../services/notification.service.ts";
 
 import type { NewUser, User } from "../types/user.ts";
 import type { Request, Response } from "express";
 import type { Timestamp } from "firebase-admin/firestore";
 import type { DecodedIdToken, UserRecord } from "firebase-admin/auth";
+import { NotificationCategory } from "../types/notification.ts";
 
 // Generates a 6-digit OTP code for email verification
 function generateOTP(): string {
@@ -397,6 +399,22 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       } catch (error) {
         console.error(
           "[signupOrEnsureUser] Error sending verification email:",
+          error
+        );
+      }
+
+      // Send welcome notification
+      try {
+        await sendNotificationToUser(
+          userID,
+          "Welcome to Provolo!",
+          "You're now part of a growing community of freelancers who are working smarter to land more clients.",
+          "/optimizer",
+          NotificationCategory.USER
+        );
+      } catch (error) {
+        console.error(
+          "[signupOrEnsureUser] Error sending welcome notification:",
           error
         );
       }
@@ -1023,6 +1041,41 @@ export async function updateProfile(req: Request, res: Response) {
     }
 
     await userDoc.ref.update(updateData);
+
+    // Check for changes and send "Knowledge Base Updated" notification
+    try {
+      const userData = userDoc.data();
+      const oldPortfolio = userData.portfolioLink || null;
+      const oldTitle = userData.professionalTitle || null;
+
+      const newPortfolio =
+        portfolio_link !== undefined
+          ? portfolio_link.trim() || null
+          : oldPortfolio;
+      const newTitle =
+        professional_title !== undefined
+          ? professional_title.trim() || null
+          : oldTitle;
+
+      // Check if anything actually changed
+      const portfolioChanged = newPortfolio !== oldPortfolio;
+      const titleChanged = newTitle !== oldTitle;
+
+      if (portfolioChanged || titleChanged) {
+        await sendNotificationToUser(
+          req.userID,
+          "Knowledge Base Updated",
+          "Your profile information has been updated. We'll use this new context for future optimizations.",
+          "/profile",
+          NotificationCategory.KNOWLEDGE
+        );
+      }
+    } catch (err) {
+      console.error(
+        "Error checking/sending knowledge base update notification:",
+        err
+      );
+    }
 
     const updatedDocs = await userQuery.get();
     const updatedUserDoc = updatedDocs.docs[0];

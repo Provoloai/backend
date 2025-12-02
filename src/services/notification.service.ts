@@ -1,13 +1,16 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
-import type { Notification } from "../types/notification.d.ts";
+import {
+  NotificationCategory,
+  type Notification,
+} from "../types/notification.ts";
 
 // Broadcasts a notification to all users.
 export const broadcastToAll = async (
   title: string,
   message: string,
   link?: string,
-  category: string = "system"
+  category: NotificationCategory = NotificationCategory.SYSTEM
 ): Promise<void> => {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -46,7 +49,7 @@ export const broadcastToTier = async (
   title: string,
   message: string,
   link?: string,
-  category: string = "system"
+  category: NotificationCategory = NotificationCategory.SYSTEM
 ): Promise<void> => {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -180,4 +183,30 @@ export const markNotificationAsRead = async (
 
   await notifRef.update({ read: true });
   return true;
+};
+
+// Sends a notification to a single user.
+export const sendNotificationToUser = async (
+  userId: string,
+  title: string,
+  message: string,
+  link?: string,
+  category: NotificationCategory = NotificationCategory.SYSTEM
+): Promise<string> => {
+  const app = getFirebaseApp();
+  const db = getFirestore(app);
+  const notificationsCollection = db.collection("notifications");
+
+  const newNotifRef = notificationsCollection.doc();
+  await newNotifRef.set({
+    recipient: userId,
+    title,
+    message,
+    link: link || null,
+    read: false,
+    category,
+    createdAt: new Date(),
+  });
+
+  return newNotifRef.id;
 };
