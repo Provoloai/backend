@@ -1066,7 +1066,7 @@ export async function updateProfile(req: Request, res: Response) {
           req.userID,
           "Knowledge Base Updated",
           "Your profile information has been updated. We'll use this new context for future optimizations.",
-          "/profile",
+          "/userprofile",
           NotificationCategory.KNOWLEDGE
         );
       }
