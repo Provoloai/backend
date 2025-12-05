@@ -3,13 +3,23 @@ import type { CorsOptions } from "cors";
 
 const devOrigins = ["http://localhost:5173", "https://provolo-dev.vercel.app"];
 
-export const prodOrigins = ["https://provolo-dev.vercel.app", "http://localhost:5173"];
+export const prodOrigins = [
+  "https://provolo.org",
+  "https://provolo.vercel.app",
+  "https://provolo-dev.vercel.app",
+];
 
 export function devCors(): CorsOptions {
   return {
     origin: devOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"],
+    allowedHeaders: [
+      "Origin",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "X-Requested-With",
+    ],
     exposedHeaders: ["Content-Length"],
     credentials: true,
     maxAge: 12 * 60 * 60,
