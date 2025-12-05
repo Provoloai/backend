@@ -1,5 +1,5 @@
-export type RecurringInterval = "daily" | "weekly" | "monthly";
-export type PlanRecurringInterval = "monthly";
+export type RecurringInterval = "daily" | "weekly" | "monthly" | "yearly";
+export type PlanRecurringInterval = "monthly" | "yearly";
 export type FeatureSlug =
   | "upwork_profile_optimizer"
   | "linkedin_profile_optimizer"

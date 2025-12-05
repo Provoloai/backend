@@ -7,7 +7,8 @@ const tiers: Tier[] = [
   {
     name: "Starter (Freemium)",
     slug: "starter",
-    description: "Perfect for new freelancers and those exploring the platform.",
+    description:
+      "Perfect for new freelancers and those exploring the platform.",
     recurringInterval: "monthly",
     price: 0,
     polarRefId: "fbba796c-931a-4074-bf57-e8c4007db387",
@@ -43,10 +44,72 @@ const tiers: Tier[] = [
   {
     name: "Plus",
     slug: "plus",
-    description: "For freelancers actively applying for jobs and serious about getting clients.",
+    description:
+      "For freelancers actively applying for jobs and serious about getting clients.",
     recurringInterval: "monthly",
     price: 399,
     polarRefId: "9d1a3ad1-5bd7-48c3-aef0-b4ea80d4ec79",
+    features: [
+      {
+        name: "Upwork Profile Optimizer",
+        description: "Full access to the Upwork Profile Optimizer feature.",
+        slug: "upwork_profile_optimizer",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "LinkedIn Profile Optimizer",
+        description: "Access to the LinkedIn Profile Optimizer feature.",
+        slug: "linkedin_profile_optimizer",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Access to the most capable AI-Powered Proposals Generator",
+        description: "Unlimited AI Proposals per month.",
+        slug: "ai_proposals",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Provolo Learn Early Community Access",
+        description: "Community Access.",
+        slug: "comunity_access",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Newsletters & Provolo Notes",
+        description: "Newsletters.",
+        slug: "newsletters",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Freelancer Growth Tools",
+        description: "Access to the Freelancer Growth Tools.",
+        slug: "freelancer_growth_tools",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    name: "Plus",
+    slug: "plusAnnual",
+    description:
+      "For freelancers actively applying for jobs and serious about getting clients.",
+    recurringInterval: "yearly",
+    price: 4300,
+    polarRefId: "4658ebbc-64d2-47a9-97bf-020bdb1eb797",
     features: [
       {
         name: "Upwork Profile Optimizer",
@@ -105,7 +168,8 @@ const tiers: Tier[] = [
 function validateFeatures(features: Feature[]): string | null {
   for (const f of features) {
     if (f.limited) {
-      if (f.maxQuota <= 0) return `feature ${f.slug} is limited but maxQuota is not set`;
+      if (f.maxQuota <= 0)
+        return `feature ${f.slug} is limited but maxQuota is not set`;
       if (!f.recurringInterval)
         return `feature ${f.slug} is limited but recurringInterval is not set`;
     } else {
