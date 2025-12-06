@@ -11,7 +11,7 @@ const tiers: Tier[] = [
       "Perfect for new freelancers and those exploring the platform.",
     recurringInterval: "monthly",
     price: 0,
-    polarRefId: "fbba796c-931a-4074-bf57-e8c4007db387",
+    polarRefId: "c9587a7b-54f7-454e-bb3b-d8f789510475",
     features: [
       {
         name: "Upwork Profile Optimizer",
@@ -48,7 +48,7 @@ const tiers: Tier[] = [
       "For freelancers actively applying for jobs and serious about getting clients.",
     recurringInterval: "monthly",
     price: 399,
-    polarRefId: "9d1a3ad1-5bd7-48c3-aef0-b4ea80d4ec79",
+    polarRefId: "a51fa43c-5ff6-420b-b719-066dff411484",
     features: [
       {
         name: "Upwork Profile Optimizer",
