@@ -8,7 +8,9 @@ export type FeatureSlug =
   | "advanced_ai_insights"
   | "comunity_access"
   | "newsletters"
-  | "freelancer_growth_tools";
+  | "freelancer_growth_tools"
+  | "optimization_history"
+  | "proposal_history";
 
 export interface Feature {
   name: string;

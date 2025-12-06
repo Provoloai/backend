@@ -67,6 +67,23 @@ const tiers: Tier[] = [
         maxQuota: -1,
       },
       {
+        name: "Optimization History",
+        description:
+          "Track all your profile optimizations and review past versions.",
+        slug: "optimization_history",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Proposal History",
+        description: "Review and learn from all your past proposals.",
+        slug: "proposal_history",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
         name: "Access to the most capable AI-Powered Proposals Generator",
         description: "Unlimited AI Proposals per month.",
         slug: "ai_proposals",
@@ -115,6 +132,23 @@ const tiers: Tier[] = [
         name: "Upwork Profile Optimizer",
         description: "Full access to the Upwork Profile Optimizer feature.",
         slug: "upwork_profile_optimizer",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Optimization History",
+        description:
+          "Track all your profile optimizations and review past versions.",
+        slug: "optimization_history",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Proposal History",
+        description: "Review and learn from all your past proposals.",
+        slug: "proposal_history",
         limited: false,
         recurringInterval: "",
         maxQuota: -1,
