@@ -1235,6 +1235,18 @@ export async function verifyEmail(req: Request, res: Response) {
         );
     }
 
+    const auth = getAuth(app);
+    try {
+      await auth.updateUser(req.userID, {
+        emailVerified: true,
+      });
+    } catch (authErr) {
+      console.error(
+        "Failed to update Firebase Auth email verification:",
+        authErr
+      );
+    }
+
     await userDoc.ref.update({
       emailVerified: true,
       otp: null,
