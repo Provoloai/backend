@@ -7,8 +7,7 @@ const tiers: Tier[] = [
   {
     name: "Starter (Freemium)",
     slug: "starter",
-    description:
-      "Perfect for new freelancers and those exploring the platform.",
+    description: "Perfect for new freelancers and those exploring the platform.",
     recurringInterval: "monthly",
     price: 0,
     polarRefId: "fbba796c-931a-4074-bf57-e8c4007db387",
@@ -44,8 +43,7 @@ const tiers: Tier[] = [
   {
     name: "Plus",
     slug: "plus",
-    description:
-      "For freelancers actively applying for jobs and serious about getting clients.",
+    description: "For freelancers actively applying for jobs and serious about getting clients.",
     recurringInterval: "monthly",
     price: 399,
     polarRefId: "9d1a3ad1-5bd7-48c3-aef0-b4ea80d4ec79",
@@ -122,8 +120,7 @@ const tiers: Tier[] = [
   {
     name: "Plus",
     slug: "plusAnnual",
-    description:
-      "For freelancers actively applying for jobs and serious about getting clients.",
+    description: "For freelancers actively applying for jobs and serious about getting clients.",
     recurringInterval: "yearly",
     price: 4300,
     polarRefId: "ee5f12df-ec1e-4fdc-b22c-6253cae9cf0d",
@@ -157,6 +154,22 @@ const tiers: Tier[] = [
         name: "LinkedIn Profile Optimizer",
         description: "Access to the LinkedIn Profile Optimizer feature.",
         slug: "linkedin_profile_optimizer",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Optimization History",
+        description: "Track all your profile optimizations and review past versions.",
+        slug: "optimization_history",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
+        name: "Proposal History",
+        description: "Review and learn from all your past proposals.",
+        slug: "proposal_history",
         limited: false,
         recurringInterval: "",
         maxQuota: -1,
@@ -202,8 +215,7 @@ const tiers: Tier[] = [
 function validateFeatures(features: Feature[]): string | null {
   for (const f of features) {
     if (f.limited) {
-      if (f.maxQuota <= 0)
-        return `feature ${f.slug} is limited but maxQuota is not set`;
+      if (f.maxQuota <= 0) return `feature ${f.slug} is limited but maxQuota is not set`;
       if (!f.recurringInterval)
         return `feature ${f.slug} is limited but recurringInterval is not set`;
     } else {
