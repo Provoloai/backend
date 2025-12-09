@@ -1,17 +1,20 @@
-export enum NotificationCategory {
-  SYSTEM = "system",
-  USER = "user",
-  PROMOTION = "promotion",
-  ADMIN = "admin",
-  OTHER = "other",
-  PROFILE = "profile",
-  PROPOSAL = "proposal",
-  KNOWLEDGE = "knowledge",
-  COMMUNITY = "community",
-  ACHIEVEMENT = "achievement",
-  SUBSCRIPTION = "subscription",
-  RESEARCH = "research",
-}
+export const NotificationCategory = {
+  SYSTEM: "system",
+  USER: "user",
+  PROMOTION: "promotion",
+  ADMIN: "admin",
+  OTHER: "other",
+  PROFILE: "profile",
+  PROPOSAL: "proposal",
+  KNOWLEDGE: "knowledge",
+  COMMUNITY: "community",
+  ACHIEVEMENT: "achievement",
+  SUBSCRIPTION: "subscription",
+  RESEARCH: "research",
+} as const;
+
+export type NotificationCategory =
+  (typeof NotificationCategory)[keyof typeof NotificationCategory];
 
 export const NOTIFICATION_CATEGORIES: string[] =
   Object.values(NotificationCategory);

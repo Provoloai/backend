@@ -151,30 +151,48 @@ export async function paymentWebhook(req: Request, res: Response) {
       const db = getFirestore(app);
 
       // Upsert logic: store all events as keys in a single 'events' map
-      const docRef = db.collection("billing_history").doc(checkoutID);
-
-      // Read existing document to preserve previous events
-      const docSnap = await docRef.get();
-      let events: Record<string, any> = {};
-      if (docSnap.exists) {
-        const existing = docSnap.data()?.events;
-        if (existing && typeof existing === "object") {
-          events = existing;
+      // Upsert logic: store all events as keys in a single 'events' map
+      let docId = checkoutID;
+      // Fallback: use subscription_id or data.id (order ID) if checkoutID is missing
+      if (!docId) {
+        if (data.subscription_id) {
+          docId = data.subscription_id;
+        } else if (data.id) {
+          docId = data.id;
         }
       }
-      events[eventType] = data;
 
-      // Ensure updated_at is always set (never undefined)
-      await docRef.set(
-        {
-          checkout_id: checkoutID,
-          current_status: status,
-          created_at: createdAt || new Date().toISOString(),
-          updated_at: updatedAt || new Date().toISOString(),
-          events: events,
-        },
-        { merge: true }
-      );
+      if (docId) {
+        const docRef = db.collection("billing_history").doc(docId);
+
+        // Read existing document to preserve previous events
+        const docSnap = await docRef.get();
+        let events: Record<string, any> = {};
+        if (docSnap.exists) {
+          const existing = docSnap.data()?.events;
+          if (existing && typeof existing === "object") {
+            events = existing;
+          }
+        }
+        events[eventType] = data;
+
+        // Ensure updated_at is always set (never undefined)
+        await docRef.set(
+          {
+            checkout_id: checkoutID || null, // Keep original checkout_id even if null
+            doc_id: docId, // Track which ID we used
+            current_status: status,
+            created_at: createdAt || new Date().toISOString(),
+            updated_at: updatedAt || new Date().toISOString(),
+            events: events,
+          },
+          { merge: true }
+        );
+      } else {
+        console.warn(
+          `[paymentWebhook] Skipping billing history persistence: No checkout_id, subscription_id, or id found for event ${eventType}`
+        );
+      }
 
       // Handle order.updated event for subscription management
       if (eventType === "order.updated") {
