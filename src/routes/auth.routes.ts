@@ -12,6 +12,8 @@ import {
   verifyEmail,
   resendVerificationOTP,
   updateProviders,
+  getDeviceHistory,
+  deleteDeviceHistory,
 } from "../controllers/auth.controller.ts";
 
 const authRouter: ExpressRouter = Router();
@@ -409,6 +411,71 @@ authRouter.put(
   strictRateLimiter(),
   authMiddleware,
   updateProviders
+);
+
+/**
+ * @openapi
+ * /api/v1/auth/devices:
+ *   get:
+ *     summary: Get device login history
+ *     description: Retrieves the last 10 login events for the user
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - sessionCookie: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: History retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ *       401:
+ *         description: Unauthorized
+ */
+authRouter.get(
+  "/devices",
+  strictRateLimiter(),
+  authMiddleware,
+  getDeviceHistory
+);
+
+/**
+ * @openapi
+ * /api/v1/auth/devices/{id}:
+ *   delete:
+ *     summary: Delete device login history entry
+ *     description: Deletes a specific login history record
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - sessionCookie: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the history record to delete
+ *     responses:
+ *       200:
+ *         description: Record deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid ID
+ */
+authRouter.delete(
+  "/devices/:id",
+  strictRateLimiter(),
+  authMiddleware,
+  deleteDeviceHistory
 );
 
 export default authRouter;

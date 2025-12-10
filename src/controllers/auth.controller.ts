@@ -12,6 +12,7 @@ import {
 } from "../services/mail.service.ts";
 import { subscribeUser } from "../services/mailerlite.service.ts";
 import { sendNotificationToUser } from "../services/notification.service.ts";
+import { UAParser } from "ua-parser-js";
 
 import type { NewUser, User } from "../types/user.ts";
 import type { Request, Response } from "express";
@@ -54,6 +55,44 @@ export async function generateAndSendOTP(
   }
 }
 
+// Records login history for a user
+async function recordLoginHistory(
+  userId: string,
+  req: Request,
+  db: FirebaseFirestore.Firestore
+): Promise<void> {
+  try {
+    const userAgent = req.headers["user-agent"] || "";
+    const parser = new UAParser(userAgent);
+    const result = parser.getResult();
+
+    const deviceName =
+      result.device.model || result.os.name || result.browser.name || "Unknown";
+    const browserName = result.browser.name
+      ? `${result.browser.name} ${result.browser.version || ""}`
+      : "Unknown";
+    const osName = result.os.name
+      ? `${result.os.name} ${result.os.version || ""}`
+      : "Unknown";
+
+    const ip =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
+      req.ip ||
+      "Unknown";
+
+    await db.collection("users").doc(userId).collection("login_history").add({
+      device: deviceName,
+      browser: browserName,
+      os: osName,
+      ip,
+      userAgent,
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    console.error("Error recording login history:", error);
+  }
+}
+
 // Authenticates user with Firebase ID token and creates a session cookie (does not send OTP automatically to avoid spamming users)
 export async function login(req: Request, res: Response) {
   try {
@@ -89,11 +128,20 @@ export async function login(req: Request, res: Response) {
     }
 
     let cookie;
+    let activeSessionToken: string;
     try {
+      // Create session cookie
       cookie = await auth.createSessionCookie(idToken, {
         expiresIn: 5 * 24 * 60 * 60 * 1000,
       });
+
+      // Generate unique session token for single-device tracking
+      activeSessionToken = crypto.randomUUID();
+
+      // Record device history
+      await recordLoginHistory(token.uid, req, db);
     } catch (err) {
+      console.log(err);
       return res
         .status(500)
         .json(
@@ -118,6 +166,7 @@ export async function login(req: Request, res: Response) {
     console.log("Setting cookie with options:", COOKIE_OPTIONS);
 
     res.cookie("session", cookie, COOKIE_OPTIONS);
+    res.cookie("session_token", activeSessionToken, COOKIE_OPTIONS);
 
     const usersRef = db.collection("users");
     const userQuery = usersRef.where("userId", "==", token.uid).limit(1);
@@ -156,13 +205,17 @@ export async function login(req: Request, res: Response) {
 
     const data = doc.data();
     const providers = data.providers || [];
+
+    // Update providers and activeSessionToken
+    const updateData: Record<string, unknown> = {
+      activeSessionToken,
+      updatedAt: new Date(),
+    };
     if (!providers.includes(currentProvider)) {
-      await doc.ref.update({
-        providers: [...providers, currentProvider],
-        updatedAt: new Date(),
-      });
+      updateData.providers = [...providers, currentProvider];
       providers.push(currentProvider);
     }
+    await doc.ref.update(updateData);
 
     const emailVerified = data.emailVerified === true;
     const user: User = {
@@ -183,16 +236,13 @@ export async function login(req: Request, res: Response) {
           : new Date((data.otpExpires as Timestamp).seconds * 1000)
         : null,
       providers,
+      activeSessionToken,
       createdAt: data.createdAt
         ? data.createdAt instanceof Date
           ? data.createdAt
           : new Date((data.createdAt as Timestamp).seconds * 1000)
         : undefined,
-      updatedAt: data.updatedAt
-        ? data.updatedAt instanceof Date
-          ? data.updatedAt
-          : new Date((data.updatedAt as Timestamp).seconds * 1000)
-        : undefined,
+      updatedAt: new Date(),
     };
 
     return res
@@ -319,6 +369,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
                 )
             : null,
           providers,
+          activeSessionToken: null, // Will be set after cookie creation
           createdAt: existingUserData.createdAt
             ? existingUserData.createdAt instanceof Date
               ? existingUserData.createdAt
@@ -362,6 +413,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         otp,
         otpExpires,
         providers: [currentProvider],
+        activeSessionToken: null, // Will be set after cookie creation
         createdAt: now,
         updatedAt: now,
       };
@@ -421,10 +473,34 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     }
 
     let cookie;
+    let activeSessionToken: string;
     try {
+      // Create session cookie
       cookie = await auth.createSessionCookie(idToken, {
         expiresIn: 5 * 24 * 60 * 60 * 1000,
       });
+
+      // Generate unique session token for single-device tracking
+      activeSessionToken = crypto.randomUUID();
+
+      // Record device history
+      await recordLoginHistory(userID, req, db);
+
+      // Update user with activeSessionToken
+      const userDocQuery = usersRef.where("userId", "==", userID).limit(1);
+      const userDocs = await userDocQuery.get();
+      if (!userDocs.empty && userDocs.docs[0]) {
+        await userDocs.docs[0].ref.update({
+          activeSessionToken,
+          updatedAt: new Date(),
+        });
+      }
+
+      // Update userData with the token
+      if (userData) {
+        userData.activeSessionToken = activeSessionToken;
+        userData.updatedAt = new Date();
+      }
     } catch (err) {
       console.error("Signup Error:", err);
       return res
@@ -450,6 +526,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
 
     console.log("Setting cookie with options:", COOKIE_OPTIONS);
     res.cookie("session", cookie, COOKIE_OPTIONS);
+    res.cookie("session_token", activeSessionToken, COOKIE_OPTIONS);
 
     const message = isNewUser
       ? "Signup successful! Your account has been created."
@@ -539,6 +616,21 @@ export async function verifySession(req: Request, res: Response) {
         );
     }
     const data = doc.data();
+
+    // Single-device enforcement: check if session_token matches stored activeSessionToken
+    const sessionTokenCookie = getCookie(req, "session_token");
+    const storedSessionToken = data.activeSessionToken;
+    if (storedSessionToken && sessionTokenCookie !== storedSessionToken) {
+      return res
+        .status(401)
+        .json(
+          newErrorResponse(
+            "Session Invalidated",
+            "You have been logged out because you signed in on another device."
+          )
+        );
+    }
+
     const emailVerified = data.emailVerified === true;
     const user: User = {
       id: doc.id,
@@ -558,6 +650,7 @@ export async function verifySession(req: Request, res: Response) {
           : new Date((data.otpExpires as Timestamp).seconds * 1000)
         : null,
       providers: data.providers || [],
+      activeSessionToken: data.activeSessionToken || null,
       createdAt: data.createdAt
         ? data.createdAt instanceof Date
           ? data.createdAt
@@ -805,6 +898,7 @@ export async function updateUsername(req: Request, res: Response) {
             : new Date((userData.otpExpires as Timestamp).seconds * 1000)
           : null,
         providers: userData.providers || [],
+        activeSessionToken: userData.activeSessionToken || null,
         createdAt: userData.createdAt
           ? userData.createdAt instanceof Date
             ? userData.createdAt
@@ -921,6 +1015,7 @@ export async function updateProviders(req: Request, res: Response) {
           : new Date((userData.otpExpires as Timestamp).seconds * 1000)
         : null,
       providers, // Use the updated providers
+      activeSessionToken: userData.activeSessionToken || null,
       createdAt: userData.createdAt
         ? userData.createdAt instanceof Date
           ? userData.createdAt
@@ -1111,6 +1206,7 @@ export async function updateProfile(req: Request, res: Response) {
           : new Date((userData.otpExpires as Timestamp).seconds * 1000)
         : null,
       providers: userData.providers || [],
+      activeSessionToken: userData.activeSessionToken || null,
       createdAt: userData.createdAt
         ? userData.createdAt instanceof Date
           ? userData.createdAt
@@ -1283,6 +1379,7 @@ export async function verifyEmail(req: Request, res: Response) {
       otp: null,
       otpExpires: null,
       providers: updatedData.providers || [],
+      activeSessionToken: updatedData.activeSessionToken || null,
       createdAt: updatedData.createdAt
         ? updatedData.createdAt instanceof Date
           ? updatedData.createdAt
@@ -1400,5 +1497,116 @@ export async function resendVerificationOTP(req: Request, res: Response) {
       );
   } finally {
     closeFirebaseApp();
+  }
+}
+
+export async function getDeviceHistory(req: Request, res: Response) {
+  try {
+    if (!req.userID) {
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "You must be logged in."));
+    }
+
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+
+    const snapshot = await db
+      .collection("users")
+      .doc(req.userID)
+      .collection("login_history")
+      .orderBy("timestamp", "desc")
+      .limit(10)
+      .get();
+
+    const history = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      let timestamp: string;
+
+      // Handle Firestore Timestamp, Date, or missing timestamp
+      if (data.timestamp) {
+        if (data.timestamp.toDate) {
+          // Firestore Timestamp object
+          timestamp = data.timestamp.toDate().toISOString();
+        } else if (data.timestamp instanceof Date) {
+          timestamp = data.timestamp.toISOString();
+        } else if (data.timestamp.seconds) {
+          // Firestore Timestamp-like object
+          timestamp = new Date(data.timestamp.seconds * 1000).toISOString();
+        } else {
+          timestamp = new Date(data.timestamp).toISOString();
+        }
+      } else {
+        timestamp = new Date().toISOString();
+      }
+
+      return {
+        id: doc.id,
+        device: data.device || "Unknown",
+        browser: data.browser || "Unknown",
+        os: data.os || "Unknown",
+        ip: data.ip || "Unknown",
+        timestamp,
+      };
+    });
+
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse("Device History", "Retrieved successfully", history)
+      );
+  } catch (err) {
+    console.error("Get Device History Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Fetch Failed",
+          "Unable to fetch device history. Please contact support."
+        )
+      );
+  }
+}
+
+export async function deleteDeviceHistory(req: Request, res: Response) {
+  try {
+    if (!req.userID) {
+      return res
+        .status(401)
+        .json(newErrorResponse("Unauthorized", "You must be logged in."));
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      return res
+        .status(400)
+        .json(newErrorResponse("Invalid Request", "ID is required"));
+    }
+
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+
+    await db
+      .collection("users")
+      .doc(req.userID)
+      .collection("login_history")
+      .doc(id)
+      .delete();
+
+    return res
+      .status(200)
+      .json(
+        newSuccessResponse("Deleted", "Device history record deleted", null)
+      );
+  } catch (err) {
+    console.error("Delete Device History Error:", err);
+    return res
+      .status(500)
+      .json(
+        newErrorResponse(
+          "Delete Failed",
+          "Unable to delete history record. Please contact support."
+        )
+      );
   }
 }

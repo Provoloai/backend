@@ -11,6 +11,7 @@ export interface NewUser {
   otp: string | null;
   otpExpires: Date | null;
   providers: string[];
+  activeSessionToken: string | null; // For single-device session tracking
   updatedAt: Date | undefined;
   createdAt: Date | undefined;
 }
