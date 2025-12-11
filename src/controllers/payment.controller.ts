@@ -351,7 +351,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
       if (events && events["order.updated"]) {
         const existingStatus = events["order.updated"].status as string;
         if (existingStatus === status) {
-          // TODO: Already processed
+          // Already processed Do not
           //   return;
         }
       }
@@ -433,28 +433,26 @@ async function handleOrderUpdated(data: Record<string, any>) {
     // Update quota history using existing utility function
     await createQuotaHistoryFromTier(userID, tier.slug);
 
-    // Send premium welcome email after successful subscription
+    // Only send premium welcome email/notification for plus or plusAnnual subscriptions
+    const isPremiumTier = tier.slug === "plus" || tier.slug === "plusAnnual";
+    if (!isPremiumTier) return;
+
+    const userEmail = userDoc.data()?.email as string;
+    const userName = userDoc.data()?.displayName;
+
+    // Send premium welcome email
     try {
-      const userEmail = userDoc.data()?.email as string;
-      const userName = userDoc.data()?.displayName;
-
-      const premiumResult = await sendPremiumWelcomeEmail(userEmail, userName);
-
-      if (premiumResult.success) {
-        console.log(
-          `Premium welcome email sent successfully for user ${userID}`
-        );
+      const result = await sendPremiumWelcomeEmail(userEmail, userName);
+      if (result.success) {
+        console.log(`Premium welcome email sent for user ${userID}`);
       } else {
         console.warn(
-          `Failed to send premium welcome email for user ${userID}:`,
-          premiumResult.error
+          `Failed to send premium email for ${userID}:`,
+          result.error
         );
       }
-    } catch (emailError) {
-      console.error(
-        `Error sending premium welcome email for user ${userID}:`,
-        emailError
-      );
+    } catch (err) {
+      console.error(`Error sending premium email for ${userID}:`, err);
     }
 
     // Send premium welcome notification
@@ -462,15 +460,12 @@ async function handleOrderUpdated(data: Record<string, any>) {
       await sendNotificationToUser(
         userID,
         "Provolo Plus Activated!",
-        "You’ve taken a big step towards landing more clients and building the career you want.",
+        "You've taken a big step towards landing more clients and building the career you want.",
         "/proposal",
         NotificationCategory.SUBSCRIPTION
       );
-    } catch (error) {
-      console.error(
-        `Error sending premium welcome notification for user ${userID}:`,
-        error
-      );
+    } catch (err) {
+      console.error(`Error sending notification for ${userID}:`, err);
     }
   } else {
     // For non-paid statuses (refunded, canceled), potentially downgrade to starter
