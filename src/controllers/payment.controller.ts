@@ -433,9 +433,10 @@ async function handleOrderUpdated(data: Record<string, any>) {
     // Update quota history using existing utility function
     await createQuotaHistoryFromTier(userID, tier.slug);
 
-    // Only send premium welcome email/notification for plus or plusAnnual subscriptions
+    // Only send premium welcome email/notification for paid plus/plusAnnual subscriptions
+    // Skip for pending, active, completed statuses - only 'paid' triggers notifications
     const isPremiumTier = tier.slug === "plus" || tier.slug === "plusAnnual";
-    if (!isPremiumTier) return;
+    if (!isPremiumTier || status !== "paid") return;
 
     const userEmail = userDoc.data()?.email as string;
     const userName = userDoc.data()?.displayName;
