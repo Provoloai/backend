@@ -63,11 +63,10 @@ export async function getPaymentTierBySlug(req: Request, res: Response) {
   try {
     const slug = req.params.slug;
 
-    if (!slug) {
+    if (!slug)
       return res
         .status(400)
         .json(newErrorResponse("Invalid Request", "Tier slug is required"));
-    }
 
     const app = getFirebaseApp();
     const db = getFirestore(app);
@@ -119,19 +118,17 @@ export async function paymentWebhook(req: Request, res: Response) {
     // Handle completely dynamic JSON data - accepts any structure
     const webhookData: Record<string, any> = req.body;
 
-    // // Log webhookData as JSON
-    // try {
-    //   const webhookJSON = JSON.stringify(webhookData, null, 2);
-    //   console.log("Payment Webhook received:", webhookJSON);
-    // } catch (err) {
-    //   console.log("Payment Webhook received (stringify error):", webhookData);
-    // }
+    if (!webhookData || typeof webhookData !== "object")
+      throw new Error("Invalid or missing request body");
 
     // Extract event type and data
     const eventType = webhookData.type as string;
     const data = webhookData.data as Record<string, any>;
+
+    if (!data) throw new Error("Missing data payload in webhook");
+
     const checkoutID = data.checkout_id as string;
-    const status = data.status as string;
+    const status = (data.status as string) || "unknown"; // Default to unknown to prevent undefined
     let createdAt = data.created_at as string;
     let updatedAt = (data.modified_at as string) || (data.updated_at as string);
 
@@ -150,7 +147,6 @@ export async function paymentWebhook(req: Request, res: Response) {
       const app = getFirebaseApp();
       const db = getFirestore(app);
 
-      // Upsert logic: store all events as keys in a single 'events' map
       // Upsert logic: store all events as keys in a single 'events' map
       let docId = checkoutID;
       // Fallback: use subscription_id or data.id (order ID) if checkoutID is missing
@@ -222,6 +218,11 @@ export async function paymentWebhook(req: Request, res: Response) {
             webhookData
           )
         );
+    } else {
+      // Return 200 for ignored events to satisfy webhook sender
+      res
+        .status(200)
+        .json(newSuccessResponse("Payment Webhook", "Event ignored", {}));
     }
   } catch (err: any) {
     console.error("[paymentWebhook] Invalid JSON payload received:", err);
@@ -230,7 +231,7 @@ export async function paymentWebhook(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Invalid Request",
-          "Invalid payment webhook data format."
+          `Invalid payment webhook data format: ${err.message}`
         )
       );
   }
