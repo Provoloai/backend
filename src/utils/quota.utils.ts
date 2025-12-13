@@ -10,10 +10,7 @@ export function resetIfNewInterval(feature: QuotaFeature, now: Date): number {
   let last: Date;
   if (feature.lastUsed instanceof Date) {
     last = feature.lastUsed;
-  } else if (
-    typeof feature.lastUsed === "object" &&
-    typeof (feature.lastUsed as any).toDate === "function"
-  ) {
+  } else if (typeof feature.lastUsed === "object" && typeof (feature.lastUsed as any).toDate === "function") {
     last = (feature.lastUsed as any).toDate();
   } else {
     last = new Date(feature.lastUsed);
@@ -42,10 +39,7 @@ export function resetIfNewInterval(feature: QuotaFeature, now: Date): number {
       break;
     }
     case "monthly":
-      if (
-        last.getUTCFullYear() !== now.getUTCFullYear() ||
-        last.getUTCMonth() !== now.getUTCMonth()
-      ) {
+      if (last.getUTCFullYear() !== now.getUTCFullYear() || last.getUTCMonth() !== now.getUTCMonth()) {
         return 0;
       }
       break;
@@ -64,21 +58,21 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
   const db = getFirestore(app);
   try {
     let quotaDoc = await db.collection("quota_history").doc(userId).get();
-    
+
     // If quota history doesn't exist, create it first
     if (!quotaDoc.exists) {
       // Get user's tier and create quota history
       const userQuery = db.collection("users").where("userId", "==", userId).limit(1);
       const userSnap = await userQuery.get();
       if (userSnap.empty) throw new Error(`User not found: ${userId}`);
-      
+
       const userDoc = userSnap.docs[0];
       if (!userDoc) throw new Error(`User document not found: ${userId}`);
-      
+
       const user = userDoc.data();
       const tierId = user.tierId || process.env.DEFAULT_TIER_ID || "starter";
       await createQuotaHistoryFromTier(userId, tierId);
-      
+
       // Fetch the newly created quota document
       quotaDoc = await db.collection("quota_history").doc(userId).get();
     }
@@ -96,6 +90,7 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
         allowed: true,
         count: currentCount,
         limit: -1,
+        period: feature.recurringInterval,
       };
     }
 
@@ -103,6 +98,7 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
       allowed: currentCount < feature.maxQuota,
       count: currentCount,
       limit: feature.maxQuota,
+      period: feature.recurringInterval,
     };
   } finally {
     closeFirebaseApp();
@@ -110,11 +106,7 @@ export async function checkUserQuota(userId: string, slug: FeatureSlug) {
 }
 
 // Create quota history for a user from their tier
-export async function createQuotaHistoryFromTier(
-  userId: string,
-  tierId: string,
-  closeApp: boolean = true
-) {
+export async function createQuotaHistoryFromTier(userId: string, tierId: string, closeApp: boolean = true) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   try {
@@ -122,14 +114,14 @@ export async function createQuotaHistoryFromTier(
     const tierSnap = await db.collection("tiers").doc(tierId).get();
     if (!tierSnap.exists) throw new Error(`Tier not found: ${tierId}`);
     const tier = tierSnap.data() as Tier;
-    
+
     // Build features
     const features = (tier.features || []).map((f: any) => ({
       ...f,
       usageCount: 0,
       lastUsed: null,
     }));
-    
+
     const now = new Date();
     const quotaHistory: QuotaHistory = {
       userId,
@@ -139,9 +131,9 @@ export async function createQuotaHistoryFromTier(
       createdAt: now,
       updatedAt: now,
     };
-    
+
     await db.collection("quota_history").doc(userId).set(quotaHistory);
-    
+
     return quotaHistory;
   } finally {
     if (closeApp) {
@@ -212,9 +204,7 @@ export async function updateQuotaHistoryForCanceledSubscription(data: Record<str
   }
 
   if (!userId) {
-    console.log(
-      "No userId found for canceled subscription (missing external_id and polarId match)"
-    );
+    console.log("No userId found for canceled subscription (missing external_id and polarId match)");
     return;
   }
 
@@ -256,9 +246,7 @@ export async function updateQuotaHistoryForUncanceledSubscription(data: Record<s
     }
   }
   if (!userId) {
-    console.log(
-      "No userId found for uncanceled subscription (missing external_id and polarId match)"
-    );
+    console.log("No userId found for uncanceled subscription (missing external_id and polarId match)");
     return;
   }
   // Update quota_history for the user to undo cancellation
@@ -281,10 +269,7 @@ export async function updateQuotaHistoryForUncanceledSubscription(data: Record<s
 }
 
 // Archive quota and downgrade user for revoked subscription
-export async function updateQuotaHistoryForRevokedSubscription(
-  data: Record<string, any>,
-  DEFAULT_TIER_ID: string
-) {
+export async function updateQuotaHistoryForRevokedSubscription(data: Record<string, any>, DEFAULT_TIER_ID: string) {
   const app = getFirebaseApp();
   const db = getFirestore(app);
   let userId = data.external_id;
@@ -352,12 +337,12 @@ export async function updateQuotaHistoryForRevokedSubscription(
     await db.collection("quota_history").doc(userId).delete();
     console.log(`Archived quota for user ${userId}`);
   }
-  
+
   // Downgrade user to starter tier
   const usersRef = db.collection("users");
   const userQuery = usersRef.where("userId", "==", userId).limit(1);
   const userDocs = await userQuery.get();
-  
+
   if (!userDocs.empty && userDocs.docs[0]) {
     await userDocs.docs[0].ref.update({
       tierId: DEFAULT_TIER_ID,
