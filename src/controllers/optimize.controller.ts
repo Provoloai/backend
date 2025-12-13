@@ -218,7 +218,7 @@ export async function optimizeProfile(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Processing Error",
-            "The AI response could not be processed. Please try again or contact support."
+            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted."
           )
         );
     }
@@ -393,7 +393,7 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Processing Error",
-            "The AI response could not be processed. Please try again or contact support."
+            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted."
           )
         );
     }
@@ -734,7 +734,7 @@ export async function generateProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Processing Error",
-            "The AI response could not be processed. Please try again or contact support."
+            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted."
           )
         );
     }

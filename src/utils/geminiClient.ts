@@ -12,8 +12,17 @@ import {
  * These errors should not be retried
  */
 function is400LevelError(error: any): boolean {
-  // Check for HTTP status code 400-499
-  if (error?.status && error.status >= 400 && error.status < 500) {
+  // Explicitly exclude RESOURCE_EXHAUSTED from validation errors regardless of other checks
+  if (error?.code === "RESOURCE_EXHAUSTED" || error?.message?.includes("RESOURCE_EXHAUSTED")) {
+    return false;
+  }
+
+  // Check for HTTP status code 400-499, explicitly excluding 429 (Too Many Requests)
+  if (error?.status && error.status >= 400 && error.status < 500 && error.status !== 429) {
+    // Double check it's not a quota error disguised as a 400
+    if (error?.code === "RESOURCE_EXHAUSTED" || error?.message?.includes("RESOURCE_EXHAUSTED")) {
+      return false;
+    }
     return true;
   }
 
@@ -53,11 +62,7 @@ function is400LevelError(error: any): boolean {
   return false;
 }
 
-export async function callGemini(
-  prompt: string,
-  systemInstruction: string,
-  maxRetries: number = 1
-): Promise<string> {
+export async function callGemini(prompt: string, systemInstruction: string, maxRetries: number = 1): Promise<string> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
@@ -80,16 +85,10 @@ export async function callGemini(
 
       if (typeof response.text === "string") {
         responseText = response.text;
-      } else if (
-        response.candidates &&
-        response.candidates[0]?.content?.parts?.[0]?.text
-      ) {
+      } else if (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) {
         responseText = response.candidates[0].content.parts[0].text;
       } else {
-        console.error(
-          "[callGemini] Unexpected response structure:",
-          JSON.stringify(response, null, 2)
-        );
+        console.error("[callGemini] Unexpected response structure:", JSON.stringify(response, null, 2));
         throw new Error("Could not extract text from Gemini response");
       }
 
@@ -98,56 +97,44 @@ export async function callGemini(
       }
 
       if (detectApiIssues(responseText)) {
-        throw new Error(
-          `API issue detected in response: ${responseText.substring(0, 200)}`
-        );
+        throw new Error(`API issue detected in response: ${responseText.substring(0, 200)}`);
       }
 
       if (detectSystemOverride(responseText)) {
-        console.error(
-          "[callGemini] System override detected - AI attempted to edit/ignore instructions"
-        );
-        throw new SystemOverrideError(
-          "The prompt attempted to do something it shouldn't."
-        );
+        console.error("[callGemini] System override detected - AI attempted to edit/ignore instructions");
+        throw new SystemOverrideError("The prompt attempted to do something it shouldn't.");
       }
 
       const validation = validateAndCleanJsonResponse(responseText);
       if (!validation.isValid) {
         // Invalid JSON is a validation error - don't retry, throw immediately
-        throw new ValidationError(`Invalid JSON response: ${validation.error}`);
+        console.error(`[callGemini] Invalid JSON response details: ${validation.error}`);
+        throw new ValidationError(
+          "Invalid JSON response from AI. Please try again, or contact support if the issue persists."
+        );
       }
 
-      console.log(
-        `[callGemini] Success on attempt ${attempt}. Response length: ${responseText.length} characters`
-      );
-      console.log(
-        `[callGemini] Response preview: ${responseText.substring(0, 100)}...`
-      );
+      console.log(`[callGemini] Success on attempt ${attempt}. Response length: ${responseText.length} characters`);
+      console.log(`[callGemini] Response preview: ${responseText.substring(0, 100)}...`);
 
       return validation.cleanedResponse || responseText.trim();
     } catch (error) {
       // Don't retry validation errors (400-level) - throw immediately
-      if (
-        error instanceof SystemOverrideError ||
-        error instanceof ValidationError
-      ) {
+      if (error instanceof SystemOverrideError || error instanceof ValidationError) {
         throw error;
       }
 
       // Check if it's a 400-level error from Gemini SDK (validation/user error)
       const isValidationError = is400LevelError(error);
       if (isValidationError) {
-        throw new ValidationError(
-          error instanceof Error ? error.message : String(error)
-        );
+        // Log the raw error for debugging
+        console.error("Gemini Upstream Validation Error (400-level):", error instanceof Error ? error.message : error);
+        // Throw a generic error to be handled as 500 (Technical Error) instead of 400 (Bad Request)
+        throw new Error("AI provider rejected the request due to configuration or safety reasons.");
       }
 
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(
-        `[callGemini] Attempt ${attempt} failed:`,
-        lastError.message
-      );
+      console.error(`[callGemini] Attempt ${attempt} failed:`, lastError.message);
 
       // Only retry for 500-level errors (server errors)
       if (attempt <= maxRetries) {
@@ -157,9 +144,14 @@ export async function callGemini(
   }
 
   console.error(`[callGemini] All ${maxRetries + 1} attempts failed`);
-  throw new Error(
-    `Gemini API call failed after ${maxRetries + 1} attempts: ${
-      lastError?.message || "Unknown error"
-    }`
-  );
+  const finalErrorMessage = lastError?.message || "Unknown error";
+  // Truncate if too long to avoid huge log dumps
+  const sanitizedMessage =
+    finalErrorMessage.length > 200 ? finalErrorMessage.substring(0, 200) + "..." : finalErrorMessage;
+
+  // Log the technical error (truncated) for server-side debugging
+  console.error(`[callGemini] All ${maxRetries + 1} attempts failed: ${sanitizedMessage}`);
+
+  // Throw a user-friendly error for the client
+  throw new Error("Unable to connect to AI service. Please try again, or contact support if the issue persists.");
 }
