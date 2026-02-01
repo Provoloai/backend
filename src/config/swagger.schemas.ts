@@ -15,7 +15,15 @@ export const SwaggerSchemas = {
       createdAt: { type: "string" },
       updatedAt: { type: "string" },
     },
-    required: ["id", "userId", "email", "tierId", "subscribed", "createdAt", "updatedAt"],
+    required: [
+      "id",
+      "userId",
+      "email",
+      "tierId",
+      "subscribed",
+      "createdAt",
+      "updatedAt",
+    ],
   },
   Tier: {
     type: "object",
@@ -41,7 +49,14 @@ export const SwaggerSchemas = {
               enum: ["daily", "weekly", "monthly", "yearly", ""],
             },
           },
-          required: ["name", "description", "slug", "limited", "maxQuota", "recurringInterval"],
+          required: [
+            "name",
+            "description",
+            "slug",
+            "limited",
+            "maxQuota",
+            "recurringInterval",
+          ],
         },
       },
       createdAt: { type: "string", format: "date-time" },
@@ -87,5 +102,105 @@ export const SwaggerSchemas = {
       data: { type: "null" },
     },
     required: ["title", "message", "status", "data"],
+  },
+  ResumeContent: {
+    type: "object",
+    properties: {
+      personalInfo: {
+        type: "object",
+        properties: {
+          fullName: { type: "string" },
+          email: { type: "string" },
+          phone: { type: "string" },
+          address: { type: "string" },
+          city: { type: "string" },
+          country: { type: "string" },
+          summary: { type: "string" },
+          jobTitle: { type: "string" },
+          links: {
+            type: "object",
+            additionalProperties: { type: "string" },
+          },
+        },
+        required: ["fullName", "email"],
+      },
+      education: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            institution: { type: "string" },
+            degree: { type: "string" },
+            fieldOfStudy: { type: "string" },
+            startDate: { type: "string" },
+            endDate: { type: "string" },
+            current: { type: "boolean" },
+            description: { type: "string" },
+          },
+          required: ["institution", "degree"],
+        },
+      },
+      experience: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            company: { type: "string" },
+            position: { type: "string" },
+            startDate: { type: "string" },
+            endDate: { type: "string" },
+            current: { type: "boolean" },
+            description: { type: "string" },
+            location: { type: "string" },
+          },
+          required: ["company", "position"],
+        },
+      },
+      skills: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            level: {
+              type: "string",
+              enum: ["Beginner", "Intermediate", "Advanced", "Expert"],
+            },
+          },
+          required: ["name"],
+        },
+      },
+      projects: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            description: { type: "string" },
+            link: { type: "string" },
+            technologies: { type: "array", items: { type: "string" } },
+            startDate: { type: "string" },
+            endDate: { type: "string" },
+          },
+          required: ["title"],
+        },
+      },
+      languages: { type: "array", items: { type: "string" } },
+      certifications: { type: "array", items: { type: "object" } },
+    },
+    required: ["personalInfo"],
+  },
+  Resume: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      userId: { type: "string" },
+      title: { type: "string" },
+      template: { type: "string" },
+      content: { $ref: "#/components/schemas/ResumeContent" },
+      createdAt: { type: "string", format: "date-time" },
+      updatedAt: { type: "string", format: "date-time" },
+    },
+    required: ["userId", "title", "content"],
   },
 };

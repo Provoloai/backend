@@ -67,6 +67,14 @@ const tiers: Tier[] = [
         maxQuota: -1,
       },
       {
+        name: "Resume Generator",
+        description: "Create professional resumes.",
+        slug: "resume_generator",
+        limited: false,
+        recurringInterval: "",
+        maxQuota: -1,
+      },
+      {
         name: "Optimization History",
         description:
           "Track all your profile optimizations and review past versions.",
@@ -162,18 +170,9 @@ const tiers: Tier[] = [
         maxQuota: -1,
       },
       {
-        name: "Optimization History",
-        description:
-          "Track all your profile optimizations and review past versions.",
-        slug: "optimization_history",
-        limited: false,
-        recurringInterval: "",
-        maxQuota: -1,
-      },
-      {
-        name: "Proposal History",
-        description: "Review and learn from all your past proposals.",
-        slug: "proposal_history",
+        name: "Resume Generator",
+        description: "Create professional resumes.",
+        slug: "resume_generator",
         limited: false,
         recurringInterval: "",
         maxQuota: -1,

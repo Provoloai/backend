@@ -13,7 +13,6 @@ export const SwaggerOptions = {
     },
     servers: [
       {
-        url: "http://localhost:8001",
         url: "http://localhost:8080",
       },
       {
