@@ -1,6 +1,6 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getFirebaseApp } from "../utils/getFirebaseApp.ts";
-import { Resume } from "../types/resume.ts";
+import type { Resume } from "../types/resume.ts";
 import { checkUserQuota, updateUserQuota } from "../utils/quota.utils.ts";
 
 export class ResumeService {
