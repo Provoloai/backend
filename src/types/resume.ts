@@ -1,7 +1,8 @@
 import { Timestamp } from "firebase-admin/firestore";
 
 export interface PersonalInfo {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone?: string;
   address?: string;
@@ -42,6 +43,11 @@ export interface SkillItem {
   level?: "Beginner" | "Intermediate" | "Advanced" | "Expert";
 }
 
+export interface LanguageItem {
+  name: string;
+  level?: "Beginner" | "Intermediate" | "Advanced" | "Expert";
+}
+
 export interface ProjectItem {
   title: string;
   description?: string;
@@ -57,16 +63,16 @@ export interface ResumeContent {
   experience?: ExperienceItem[];
   skills?: SkillItem[];
   projects?: ProjectItem[];
-  languages?: string[];
+  languages?: LanguageItem[];
   certifications?: any[];
-  [key: string]: any; // Allow extensibility
+  [key: string]: any;
 }
 
 export interface Resume {
   id?: string;
   userId: string;
-  title: string; // User-defined name for the file (e.g. "Software Engineer v1")
-  template: string; // e.g. "classic", "modern"
+  title: string;
+  template: string;
   content: ResumeContent;
   createdAt: Timestamp;
   updatedAt: Timestamp;

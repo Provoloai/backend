@@ -1,7 +1,3 @@
-/**
- * OpenAPI reusable schemas for Provolo API
- */
-
 export const SwaggerSchemas = {
   User: {
     type: "object",
@@ -105,11 +101,13 @@ export const SwaggerSchemas = {
   },
   ResumeContent: {
     type: "object",
+    additionalProperties: true,
     properties: {
       personalInfo: {
         type: "object",
         properties: {
-          fullName: { type: "string" },
+          firstName: { type: "string" },
+          lastName: { type: "string" },
           email: { type: "string" },
           phone: { type: "string" },
           address: { type: "string" },
@@ -122,7 +120,7 @@ export const SwaggerSchemas = {
             additionalProperties: { type: "string" },
           },
         },
-        required: ["fullName", "email"],
+        required: ["firstName", "lastName", "email"],
       },
       education: {
         type: "array",
@@ -185,7 +183,19 @@ export const SwaggerSchemas = {
           required: ["title"],
         },
       },
-      languages: { type: "array", items: { type: "string" } },
+      languages: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            level: {
+              type: "string",
+              enum: ["Beginner", "Intermediate", "Advanced", "Expert"],
+            },
+          },
+        },
+      },
       certifications: { type: "array", items: { type: "object" } },
     },
     required: ["personalInfo"],
