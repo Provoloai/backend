@@ -46,7 +46,7 @@ import { NotificationCategory } from "../types/notification.ts";
 // Helper function to get user profile data (displayName, portfolioLink, professionalTitle) in one DB call
 async function getUserProfileData(
   userId: string,
-  tokenDisplayName?: string
+  tokenDisplayName?: string,
 ): Promise<{
   displayName: string | undefined;
   portfolioLink: string | null;
@@ -76,7 +76,7 @@ async function getUserProfileData(
     } catch (err) {
       console.error(
         "[getUserProfileData] Error fetching user profile data:",
-        err
+        err,
       );
     }
     return {
@@ -109,7 +109,7 @@ async function getUserProfileData(
   } catch (err) {
     console.error(
       "[getUserProfileData] Error fetching user profile data:",
-      err
+      err,
     );
   }
 
@@ -145,8 +145,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Missing required fields: full_name, professional_title, profile"
-          )
+            "Missing required fields: full_name, professional_title, profile",
+          ),
         );
     }
     if (
@@ -159,8 +159,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Validation Error",
-            "Input fields exceed allowed length."
-          )
+            "Input fields exceed allowed length.",
+          ),
         );
     }
 
@@ -176,8 +176,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Internal Server Error",
-            "An error occurred. Please try again or contact support."
-          )
+            "An error occurred. Please try again or contact support.",
+          ),
         );
     }
     if (!quotaResult.allowed) {
@@ -188,8 +188,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Quota Exceeded",
-            `You’ve used up your available ${quotaResult.period} quota. Please try again later or upgrade your plan. Current usage: ${quotaResult.count}/${limitText}.`
-          )
+            `You’ve used up your available ${quotaResult.period} quota. Please try again later or upgrade your plan. Current usage: ${quotaResult.count}/${limitText}.`,
+          ),
         );
     }
 
@@ -216,7 +216,7 @@ export async function optimizeProfile(req: Request, res: Response) {
           console.warn(
             "Warning: Failed to update quota after system override error for user",
             userId,
-            quotaErr
+            quotaErr,
           );
         }
 
@@ -225,8 +225,8 @@ export async function optimizeProfile(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Invalid Request",
-              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
-            )
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted.",
+            ),
           );
       }
 
@@ -238,8 +238,8 @@ export async function optimizeProfile(req: Request, res: Response) {
             newErrorResponse(
               "Validation Error",
               err.message ||
-                "Invalid request. Please check your input and try again."
-            )
+                "Invalid request. Please check your input and try again.",
+            ),
           );
       }
 
@@ -248,8 +248,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "AI Service Error",
-            "An error occurred. Please try again or contact support."
-          )
+            "An error occurred. Please try again or contact support.",
+          ),
         );
     }
 
@@ -262,15 +262,15 @@ export async function optimizeProfile(req: Request, res: Response) {
         "[optimizeProfile] Unexpected JSON parse failure after validation:",
         err instanceof Error ? err.message : String(err),
         "Response text:",
-        aiResponseText.substring(0, 500) + "..."
+        aiResponseText.substring(0, 500) + "...",
       );
       return res
         .status(500)
         .json(
           newErrorResponse(
             "Processing Error",
-            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted."
-          )
+            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted.",
+          ),
         );
     }
 
@@ -295,13 +295,13 @@ export async function optimizeProfile(req: Request, res: Response) {
               "Milestone Unlocked: First Optimization!",
               "You've just optimized your first profile. You're a step closer to your goal!",
               "/optimizer",
-              NotificationCategory.ACHIEVEMENT
+              NotificationCategory.ACHIEVEMENT,
             );
           }
         } catch (err) {
           console.error(
             "Error checking/sending first optimization notification:",
-            err
+            err,
           );
         }
 
@@ -321,13 +321,13 @@ export async function optimizeProfile(req: Request, res: Response) {
       } else {
         // non-premium - skip storing history
         console.debug(
-          `[optimizeProfile] Skipping optimizer history store for user ${userId} with tier ${userTierId}`
+          `[optimizeProfile] Skipping optimizer history store for user ${userId} with tier ${userTierId}`,
         );
       }
     } catch (err) {
       console.warn(
         "Failed to check user tier before storing optimizer history",
-        err
+        err,
       );
     }
 
@@ -338,8 +338,8 @@ export async function optimizeProfile(req: Request, res: Response) {
         newSuccessResponse(
           "Optimization Successful",
           "Profile optimized successfully",
-          parsedResponse
-        )
+          parsedResponse,
+        ),
       );
   } catch (err) {
     // Top-level catch for any unexpected errors
@@ -349,8 +349,8 @@ export async function optimizeProfile(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred. Please try again or contact support."
-        )
+          "An error occurred. Please try again or contact support.",
+        ),
       );
   }
 }
@@ -373,8 +373,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Missing required fields: full_name, professional_title, profile"
-          )
+            "Missing required fields: full_name, professional_title, profile",
+          ),
         );
     }
     if (
@@ -387,8 +387,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Validation Error",
-            "Input fields exceed allowed length."
-          )
+            "Input fields exceed allowed length.",
+          ),
         );
     }
 
@@ -404,8 +404,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Internal Server Error",
-            "An error occurred. Please try again or contact support."
-          )
+            "An error occurred. Please try again or contact support.",
+          ),
         );
     }
     if (!quotaResult.allowed) {
@@ -416,8 +416,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Quota Exceeded",
-            `You’ve used up your available ${quotaResult.period} quota. Please try again later or upgrade your plan. Current usage: ${quotaResult.count}/${limitText}.`
-          )
+            `You’ve used up your available ${quotaResult.period} quota. Please try again later or upgrade your plan. Current usage: ${quotaResult.count}/${limitText}.`,
+          ),
         );
     }
 
@@ -434,7 +434,7 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
     try {
       aiResponseText = await callGemini(
         content,
-        linkedinOptimizerSystemInstruction()
+        linkedinOptimizerSystemInstruction(),
       );
     } catch (err: any) {
       console.error("[optimizeLinkedIn] AI service call failed:", err);
@@ -447,7 +447,7 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
           console.warn(
             "Warning: Failed to update quota after system override error for user",
             userId,
-            quotaErr
+            quotaErr,
           );
         }
 
@@ -456,8 +456,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Invalid Request",
-              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
-            )
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted.",
+            ),
           );
       }
 
@@ -469,8 +469,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
             newErrorResponse(
               "Validation Error",
               err.message ||
-                "Invalid request. Please check your input and try again."
-            )
+                "Invalid request. Please check your input and try again.",
+            ),
           );
       }
 
@@ -479,8 +479,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "AI Service Error",
-            "An error occurred. Please try again or contact support."
-          )
+            "An error occurred. Please try again or contact support.",
+          ),
         );
     }
 
@@ -493,15 +493,15 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         "[optimizeLinkedIn] Unexpected JSON parse failure after validation:",
         err instanceof Error ? err.message : String(err),
         "Response text:",
-        aiResponseText.substring(0, 500) + "..."
+        aiResponseText.substring(0, 500) + "...",
       );
       return res
         .status(500)
         .json(
           newErrorResponse(
             "Processing Error",
-            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted."
-          )
+            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted.",
+          ),
         );
     }
 
@@ -527,13 +527,13 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
               "Milestone Unlocked: First Optimization!",
               "You've just optimized your first profile. You're a step closer to your goal!",
               "/optimizer",
-              NotificationCategory.ACHIEVEMENT
+              NotificationCategory.ACHIEVEMENT,
             );
           }
         } catch (err) {
           console.error(
             "Error checking/sending first optimization notification:",
-            err
+            err,
           );
         }
 
@@ -552,13 +552,13 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
       } else {
         // non-premium - skip storing history
         console.debug(
-          `[optimizeLinkedIn] Skipping optimizer history store for user ${userId} with tier ${userTierId}`
+          `[optimizeLinkedIn] Skipping optimizer history store for user ${userId} with tier ${userTierId}`,
         );
       }
     } catch (err) {
       console.warn(
         "Failed to check user tier before storing optimizer history (linkedin)",
-        err
+        err,
       );
     }
 
@@ -569,8 +569,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
         newSuccessResponse(
           "Optimization Successful",
           "LinkedIn profile optimized successfully",
-          parsedResponse
-        )
+          parsedResponse,
+        ),
       );
   } catch (err) {
     // Top-level catch for any unexpected errors
@@ -580,8 +580,8 @@ export async function optimizeLinkedIn(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred. Please try again or contact support."
-        )
+          "An error occurred. Please try again or contact support.",
+        ),
       );
   }
 }
@@ -616,8 +616,8 @@ export async function getOptimizerHistory(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Page must be >=1 and limit between 1 and 50"
-          )
+            "Page must be >=1 and limit between 1 and 50",
+          ),
         );
     }
 
@@ -626,7 +626,7 @@ export async function getOptimizerHistory(req: Request, res: Response) {
       pageNum,
       limitNum,
       search,
-      type as OptimizerType | undefined
+      type as OptimizerType | undefined,
     );
 
     return res.status(200).json(
@@ -641,8 +641,8 @@ export async function getOptimizerHistory(req: Request, res: Response) {
             total: result.total,
             hasMore: result.hasMore,
           },
-        }
-      )
+        },
+      ),
     );
   } catch (err) {
     console.error("[getOptimizerHistory] Error", err);
@@ -651,8 +651,8 @@ export async function getOptimizerHistory(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "Failed to retrieve optimizer history"
-        )
+          "Failed to retrieve optimizer history",
+        ),
       );
   }
 }
@@ -660,7 +660,7 @@ export async function getOptimizerHistory(req: Request, res: Response) {
 // Get single optimizer history record
 export async function getOptimizerHistoryByIdController(
   req: Request,
-  res: Response
+  res: Response,
 ) {
   try {
     const userId = req.userID as string;
@@ -680,7 +680,7 @@ export async function getOptimizerHistoryByIdController(
       return res
         .status(404)
         .json(
-          newErrorResponse("Not Found", "Record not found or access denied")
+          newErrorResponse("Not Found", "Record not found or access denied"),
         );
     }
     return res
@@ -689,8 +689,8 @@ export async function getOptimizerHistoryByIdController(
         newSuccessResponse(
           "Record Retrieved",
           "Optimizer record retrieved successfully",
-          record
-        )
+          record,
+        ),
       );
   } catch (err) {
     console.error("[getOptimizerHistoryByIdController] Error", err);
@@ -699,8 +699,8 @@ export async function getOptimizerHistoryByIdController(
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "Failed to retrieve optimizer record"
-        )
+          "Failed to retrieve optimizer record",
+        ),
       );
   }
 }
@@ -708,7 +708,7 @@ export async function getOptimizerHistoryByIdController(
 // Cron cleanup for optimizer history
 export async function cleanupOldOptimizerHistoryController(
   req: Request,
-  res: Response
+  res: Response,
 ) {
   try {
     const secret = process.env.CRON_SECRET;
@@ -727,15 +727,15 @@ export async function cleanupOldOptimizerHistoryController(
         "Deleted optimizer history older than 30 days",
         {
           deleted,
-        }
-      )
+        },
+      ),
     );
   } catch (err) {
     console.error("[cleanupOldOptimizerHistoryController] Error", err);
     return res
       .status(500)
       .json(
-        newErrorResponse("Internal Server Error", "Optimizer cleanup failed")
+        newErrorResponse("Internal Server Error", "Optimizer cleanup failed"),
       );
   }
 }
@@ -759,8 +759,8 @@ export async function generateProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Missing required fields: client_name, job_title, proposal_tone, job_summary"
-          )
+            "Missing required fields: client_name, job_title, proposal_tone, job_summary",
+          ),
         );
     }
     if (
@@ -773,8 +773,8 @@ export async function generateProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Validation Error",
-            "Input fields exceed allowed length."
-          )
+            "Input fields exceed allowed length.",
+          ),
         );
     }
     const validTones = ["professional", "conversational", "confident", "calm"];
@@ -784,8 +784,8 @@ export async function generateProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Validation Error",
-            "Invalid proposal tone. Must be one of: professional, conversational, confident, calm"
-          )
+            "Invalid proposal tone. Must be one of: professional, conversational, confident, calm",
+          ),
         );
     }
 
@@ -800,15 +800,15 @@ export async function generateProposal(req: Request, res: Response) {
     } catch (err: any) {
       console.error(
         "[generateProposal] Quota check or profile fetch error:",
-        err
+        err,
       );
       return res
         .status(500)
         .json(
           newErrorResponse(
             "Internal Server Error",
-            "An error occurred. Please try again or contact support."
-          )
+            "An error occurred. Please try again or contact support.",
+          ),
         );
     }
 
@@ -820,8 +820,8 @@ export async function generateProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Quota Exceeded",
-            `Quota limit exceeded for AI proposals. Current usage: ${quotaResult.count}/${limitText}. Try again in the next period.`
-          )
+            `Quota limit exceeded for AI proposals. Current usage: ${quotaResult.count}/${limitText}. Try again in the next period.`,
+          ),
         );
     }
 
@@ -854,7 +854,7 @@ export async function generateProposal(req: Request, res: Response) {
           console.warn(
             "Warning: Failed to update quota after system override error for user",
             userId,
-            quotaErr
+            quotaErr,
           );
         }
 
@@ -863,8 +863,8 @@ export async function generateProposal(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Invalid Request",
-              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
-            )
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted.",
+            ),
           );
       }
 
@@ -876,8 +876,8 @@ export async function generateProposal(req: Request, res: Response) {
             newErrorResponse(
               "Validation Error",
               err.message ||
-                "Invalid request. Please check your input and try again."
-            )
+                "Invalid request. Please check your input and try again.",
+            ),
           );
       }
 
@@ -886,8 +886,8 @@ export async function generateProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "AI Service Error",
-            "An error occurred. Please try again or contact support."
-          )
+            "An error occurred. Please try again or contact support.",
+          ),
         );
     }
 
@@ -908,8 +908,8 @@ export async function generateProposal(req: Request, res: Response) {
               newErrorResponse(
                 "Out of Scope",
                 parsedResponse.message ||
-                  "This type of work is not supported. Please provide a web development related project."
-              )
+                  "This type of work is not supported. Please provide a web development related project.",
+              ),
             );
         } else if (parsedResponse.code === "INVALID_INPUT") {
           return res
@@ -918,8 +918,8 @@ export async function generateProposal(req: Request, res: Response) {
               newErrorResponse(
                 "Invalid Input",
                 parsedResponse.message ||
-                  "The provided information is not valid. Please check your input and try again."
-              )
+                  "The provided information is not valid. Please check your input and try again.",
+              ),
             );
         } else if (parsedResponse.code === "CONTENT_TOO_LONG") {
           return res
@@ -928,8 +928,8 @@ export async function generateProposal(req: Request, res: Response) {
               newErrorResponse(
                 "Content Too Long",
                 parsedResponse.message ||
-                  "The job description is too long. Please provide a shorter summary."
-              )
+                  "The job description is too long. Please provide a shorter summary.",
+              ),
             );
         } else {
           return res
@@ -938,8 +938,8 @@ export async function generateProposal(req: Request, res: Response) {
               newErrorResponse(
                 "AI Error",
                 parsedResponse.message ||
-                  "The AI service encountered an error. Please try again."
-              )
+                  "The AI service encountered an error. Please try again.",
+              ),
             );
         }
       }
@@ -951,15 +951,15 @@ export async function generateProposal(req: Request, res: Response) {
         "[generateProposal] Unexpected JSON parse failure after validation:",
         err instanceof Error ? err.message : String(err),
         "Response text:",
-        aiResponseText.substring(0, 500) + "..."
+        aiResponseText.substring(0, 500) + "...",
       );
       return res
         .status(500)
         .json(
           newErrorResponse(
             "Processing Error",
-            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted."
-          )
+            "Invalid JSON response from AI. Please try again, or contact support if the issue persists. Your quota has not been deducted.",
+          ),
         );
     }
 
@@ -971,8 +971,8 @@ export async function generateProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Processing Error",
-            "The AI response was empty. Please try again or contact support."
-          )
+            "The AI response was empty. Please try again or contact support.",
+          ),
         );
     }
 
@@ -990,7 +990,7 @@ export async function generateProposal(req: Request, res: Response) {
     proposalResponse.mdx = createProposalMDX(
       proposalResponse,
       sanitizedClientName,
-      portfolioLink || null
+      portfolioLink || null,
     );
 
     // 7. Store proposal history and update quota in parallel (non-blocking for response)
@@ -1004,7 +1004,7 @@ export async function generateProposal(req: Request, res: Response) {
           "Milestone Unlocked: First Proposal!",
           "You've successfully generated your first proposal. Start pitching the right way!",
           "/proposal",
-          NotificationCategory.ACHIEVEMENT
+          NotificationCategory.ACHIEVEMENT,
         );
       }
     } catch (err) {
@@ -1020,12 +1020,12 @@ export async function generateProposal(req: Request, res: Response) {
         proposal_tone: proposal_tone,
         job_summary: sanitizedJobSummary,
       },
-      proposalResponse
+      proposalResponse,
     ).catch((err) => {
       console.warn(
         "Warning: Failed to store proposal history for user",
         userId,
-        err
+        err,
       );
       return undefined;
     });
@@ -1048,8 +1048,8 @@ export async function generateProposal(req: Request, res: Response) {
         newSuccessResponse(
           "Proposal Generated",
           "AI proposal generated successfully",
-          proposalResponse
-        )
+          proposalResponse,
+        ),
       );
   } catch (err) {
     // Top-level catch for any unexpected errors
@@ -1059,8 +1059,8 @@ export async function generateProposal(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred. Please try again or contact support."
-        )
+          "An error occurred. Please try again or contact support.",
+        ),
       );
   }
 }
@@ -1088,8 +1088,8 @@ export async function getProposalHistory(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Page must be >= 1, limit must be between 1 and 50"
-          )
+            "Page must be >= 1, limit must be between 1 and 50",
+          ),
         );
     }
 
@@ -1098,7 +1098,7 @@ export async function getProposalHistory(req: Request, res: Response) {
       userId,
       pageNum,
       limitNum,
-      search
+      search,
     );
 
     // 5. Return success
@@ -1114,8 +1114,8 @@ export async function getProposalHistory(req: Request, res: Response) {
             total: result.total,
             hasMore: result.hasMore,
           },
-        }
-      )
+        },
+      ),
     );
   } catch (err) {
     console.error("[getProposalHistory] Error:", err);
@@ -1124,8 +1124,8 @@ export async function getProposalHistory(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred while retrieving proposal history. Please try again or contact support."
-        )
+          "An error occurred while retrieving proposal history. Please try again or contact support.",
+        ),
       );
   }
 }
@@ -1155,7 +1155,7 @@ export async function getProposalByIdController(req: Request, res: Response) {
       return res
         .status(404)
         .json(
-          newErrorResponse("Not Found", "Proposal not found or access denied")
+          newErrorResponse("Not Found", "Proposal not found or access denied"),
         );
     }
 
@@ -1166,8 +1166,8 @@ export async function getProposalByIdController(req: Request, res: Response) {
         newSuccessResponse(
           "Proposal Retrieved",
           "AI proposal retrieved successfully",
-          proposal
-        )
+          proposal,
+        ),
       );
   } catch (err) {
     console.error("[getProposalByIdController] Error:", err);
@@ -1176,8 +1176,8 @@ export async function getProposalByIdController(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred while retrieving the proposal. Please try again or contact support."
-        )
+          "An error occurred while retrieving the proposal. Please try again or contact support.",
+        ),
       );
   }
 }
@@ -1193,7 +1193,7 @@ export async function refineProposal(req: Request, res: Response) {
     }
 
     // 2. Validate input
-    const { proposalId, refinementType, newTone } =
+    const { proposalId, refinementType, newTone, customInstruction } =
       req.body as RefineProposalReq;
 
     if (!proposalId || !refinementType) {
@@ -1202,8 +1202,8 @@ export async function refineProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Missing proposalId or refinementType"
-          )
+            "Missing proposalId or refinementType",
+          ),
         );
     }
 
@@ -1213,6 +1213,7 @@ export async function refineProposal(req: Request, res: Response) {
       "simplify_text",
       "improve_flow",
       "change_tone",
+      "custom",
     ];
 
     if (!validRefinementTypes.includes(refinementType)) {
@@ -1228,8 +1229,32 @@ export async function refineProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "newTone required for change_tone refinement"
-          )
+            "newTone required for change_tone refinement",
+          ),
+        );
+    }
+
+    // Custom refinement requires customInstruction
+    if (refinementType === "custom" && !customInstruction) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Invalid Request",
+            "customInstruction is required for custom refinement",
+          ),
+        );
+    }
+
+    // Validate customInstruction length if provided
+    if (customInstruction && customInstruction.length > 1000) {
+      return res
+        .status(400)
+        .json(
+          newErrorResponse(
+            "Validation Error",
+            "customInstruction must be 1000 characters or less",
+          ),
         );
     }
 
@@ -1248,7 +1273,7 @@ export async function refineProposal(req: Request, res: Response) {
     // 4a. Get user profile data (displayName, portfolioLink)
     const { displayName, portfolioLink } = await getUserProfileData(
       userId,
-      req.userDisplayName
+      req.userDisplayName,
     );
 
     // 5. Call AI for refinement
@@ -1258,14 +1283,15 @@ export async function refineProposal(req: Request, res: Response) {
       proposal.jobTitle,
       proposal.clientName,
       newTone || proposal.proposalTone,
-      displayName
+      displayName,
+      customInstruction,
     );
 
     let aiResponseText = "";
     try {
       aiResponseText = await callGemini(
         prompt,
-        refineProposalSystemInstruction()
+        refineProposalSystemInstruction(),
       );
     } catch (err: any) {
       console.error("[refineProposal] AI call failed:", err);
@@ -1278,7 +1304,7 @@ export async function refineProposal(req: Request, res: Response) {
           console.warn(
             "Warning: Failed to update quota after system override error for user",
             userId,
-            quotaErr
+            quotaErr,
           );
         }
 
@@ -1287,8 +1313,8 @@ export async function refineProposal(req: Request, res: Response) {
           .json(
             newErrorResponse(
               "Invalid Request",
-              "The prompt attempted to do something it shouldn't. Your quota has been deducted."
-            )
+              "The prompt attempted to do something it shouldn't. Your quota has been deducted.",
+            ),
           );
       }
 
@@ -1300,8 +1326,8 @@ export async function refineProposal(req: Request, res: Response) {
             newErrorResponse(
               "Validation Error",
               err.message ||
-                "Invalid request. Please check your input and try again."
-            )
+                "Invalid request. Please check your input and try again.",
+            ),
           );
       }
 
@@ -1310,8 +1336,8 @@ export async function refineProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "AI Service Error",
-            "Failed to refine proposal. Please try again."
-          )
+            "Failed to refine proposal. Please try again.",
+          ),
         );
     }
 
@@ -1326,8 +1352,8 @@ export async function refineProposal(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Processing Error",
-            "Failed to process refined proposal."
-          )
+            "Failed to process refined proposal.",
+          ),
         );
     }
 
@@ -1337,7 +1363,7 @@ export async function refineProposal(req: Request, res: Response) {
     refinedProposal.mdx = createProposalMDX(
       refinedProposal,
       sanitizedClientName,
-      portfolioLink || null
+      portfolioLink || null,
     );
 
     // 7. Store refinement
@@ -1347,7 +1373,7 @@ export async function refineProposal(req: Request, res: Response) {
       refinementType,
       currentProposal,
       refinedProposal,
-      refinementOrder
+      refinementOrder,
     );
 
     // 8. Return success
@@ -1357,8 +1383,8 @@ export async function refineProposal(req: Request, res: Response) {
         newSuccessResponse(
           "Proposal Refined",
           "Proposal refined successfully",
-          refinedProposal
-        )
+          refinedProposal,
+        ),
       );
   } catch (err) {
     console.error("[refineProposal] Error:", err);
@@ -1367,8 +1393,8 @@ export async function refineProposal(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred while refining the proposal."
-        )
+          "An error occurred while refining the proposal.",
+        ),
       );
   }
 }
@@ -1376,7 +1402,7 @@ export async function refineProposal(req: Request, res: Response) {
 // Get all versions of a proposal
 export async function getProposalVersionsController(
   req: Request,
-  res: Response
+  res: Response,
 ) {
   try {
     const userId = req.userID as string;
@@ -1401,8 +1427,8 @@ export async function getProposalVersionsController(
         "Proposal versions retrieved successfully",
         {
           versions,
-        }
-      )
+        },
+      ),
     );
   } catch (err) {
     console.error("[getProposalVersionsController] Error:", err);
@@ -1411,8 +1437,8 @@ export async function getProposalVersionsController(
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred while retrieving proposal versions."
-        )
+          "An error occurred while retrieving proposal versions.",
+        ),
       );
   }
 }
@@ -1463,8 +1489,8 @@ export async function cleanupOldProposalHistory(req: Request, res: Response) {
         {
           deleted,
           cutoff: cutoff.toISOString(),
-        }
-      )
+        },
+      ),
     );
   } catch (err) {
     console.error("[cleanupOldProposalHistory] Error:", err);
@@ -1493,8 +1519,8 @@ export async function getUserQuota(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            "Missing required query parameter: quota"
-          )
+            "Missing required query parameter: quota",
+          ),
         );
     }
 
@@ -1516,8 +1542,8 @@ export async function getUserQuota(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Invalid Request",
-            `Invalid quota slug. Must be one of: ${validQuotaSlugs.join(", ")}`
-          )
+            `Invalid quota slug. Must be one of: ${validQuotaSlugs.join(", ")}`,
+          ),
         );
     }
 
@@ -1532,8 +1558,8 @@ export async function getUserQuota(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Internal Server Error",
-            "An error occurred while checking quota. Please try again or contact support."
-          )
+            "An error occurred while checking quota. Please try again or contact support.",
+          ),
         );
     }
 
@@ -1550,8 +1576,8 @@ export async function getUserQuota(req: Request, res: Response) {
             quotaResult.limit === -1
               ? -1
               : Math.max(0, quotaResult.limit - quotaResult.count),
-        }
-      )
+        },
+      ),
     );
   } catch (err) {
     console.error("[getUserQuota] Unhandled error:", err);
@@ -1560,8 +1586,8 @@ export async function getUserQuota(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Internal Server Error",
-          "An error occurred. Please try again or contact support."
-        )
+          "An error occurred. Please try again or contact support.",
+        ),
       );
   }
 }
