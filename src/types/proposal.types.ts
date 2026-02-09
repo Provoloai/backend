@@ -25,12 +25,13 @@ export interface AIErrorResponse {
   code: "OUT_OF_SCOPE" | "INVALID_INPUT" | "CONTENT_TOO_LONG" | "GENERAL_ERROR";
 }
 
-export type RefinementAction = 
-  | "expand_text" 
-  | "trim_text" 
-  | "simplify_text" 
+export type RefinementAction =
+  | "expand_text"
+  | "trim_text"
+  | "simplify_text"
   | "improve_flow"
-  | "change_tone";
+  | "change_tone"
+  | "custom";
 
 export interface ProposalHistory {
   id: string;
@@ -66,6 +67,7 @@ export interface RefineProposalReq {
   proposalId: string;
   refinementType: RefinementAction;
   newTone?: "professional" | "conversational" | "confident" | "calm";
+  customInstruction?: string; // User's custom instruction for 'custom' refinement type
 }
 
 export interface RefinementHistory {
@@ -98,4 +100,5 @@ export const REFINEMENT_LABELS: Record<RefinementAction, string> = {
   simplify_text: "Simplified Text",
   improve_flow: "Improved Flow",
   change_tone: "Changed Tone",
+  custom: "Custom Refinement",
 };

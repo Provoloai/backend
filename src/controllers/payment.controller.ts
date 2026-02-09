@@ -43,8 +43,8 @@ export async function getPaymentTiers(req: Request, res: Response) {
         newSuccessResponse(
           "Payment Tiers",
           "Payment tiers retrieved successfully",
-          tiers
-        )
+          tiers,
+        ),
       );
   } catch (err: any) {
     console.error("[getPaymentTiers] Failed to retrieve payment tiers:", err);
@@ -53,8 +53,8 @@ export async function getPaymentTiers(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Service Error",
-          "Unable to retrieve pricing information. Please contact support if this continues."
-        )
+          "Unable to retrieve pricing information. Please contact support if this continues.",
+        ),
       );
   }
 }
@@ -82,7 +82,10 @@ export async function getPaymentTierBySlug(req: Request, res: Response) {
       return res
         .status(404)
         .json(
-          newErrorResponse("Tier Not Found", `No tier found with slug: ${slug}`)
+          newErrorResponse(
+            "Tier Not Found",
+            `No tier found with slug: ${slug}`,
+          ),
         );
     }
 
@@ -94,21 +97,21 @@ export async function getPaymentTierBySlug(req: Request, res: Response) {
         newSuccessResponse(
           "Payment Tier",
           "Payment tier retrieved successfully",
-          tier
-        )
+          tier,
+        ),
       );
   } catch (err: any) {
     console.error(
       `[getPaymentTierBySlug] Failed to retrieve payment tier (${req.params.slug}):`,
-      err
+      err,
     );
     return res
       .status(500)
       .json(
         newErrorResponse(
           "Service Error",
-          "Unable to retrieve pricing information. Please contact support if this continues."
-        )
+          "Unable to retrieve pricing information. Please contact support if this continues.",
+        ),
       );
   }
 }
@@ -182,11 +185,11 @@ export async function paymentWebhook(req: Request, res: Response) {
             updated_at: updatedAt || new Date().toISOString(),
             events: events,
           },
-          { merge: true }
+          { merge: true },
         );
       } else {
         console.warn(
-          `[paymentWebhook] Skipping billing history persistence: No checkout_id, subscription_id, or id found for event ${eventType}`
+          `[paymentWebhook] Skipping billing history persistence: No checkout_id, subscription_id, or id found for event ${eventType}`,
         );
       }
 
@@ -215,8 +218,8 @@ export async function paymentWebhook(req: Request, res: Response) {
           newSuccessResponse(
             "Payment Webhook",
             "Webhook received and processed successfully - any data structure accepted",
-            webhookData
-          )
+            webhookData,
+          ),
         );
     } else {
       // Return 200 for ignored events to satisfy webhook sender
@@ -231,8 +234,8 @@ export async function paymentWebhook(req: Request, res: Response) {
       .json(
         newErrorResponse(
           "Invalid Request",
-          `Invalid payment webhook data format: ${err.message}`
-        )
+          `Invalid payment webhook data format: ${err.message}`,
+        ),
       );
   }
 }
@@ -309,7 +312,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
   // Skip if we have neither user_id nor customer email
   if (!userID && !customerEmail) {
     throw new Error(
-      "no user identification found: missing both metadata.user_id and customer.email"
+      "no user identification found: missing both metadata.user_id and customer.email",
     );
   }
 
@@ -322,8 +325,9 @@ async function handleOrderUpdated(data: Record<string, any>) {
   }
 
   // Define accepted "paid" statuses
+  // NOTE: pending is FALSE - users should only get access when payment is confirmed
   const paidStatuses: Record<string, boolean> = {
-    pending: true,
+    pending: false,
     paid: true,
     active: true,
     completed: true,
@@ -409,7 +413,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
 
   if (!userDoc) {
     throw new Error(
-      `user not found with userID: ${userID} or email: ${customerEmail}`
+      `user not found with userID: ${userID} or email: ${customerEmail}`,
     );
   }
 
@@ -427,7 +431,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
     } catch (err) {
       console.warn(
         `Warning: Failed to archive quota history for user ${userID}:`,
-        err
+        err,
       );
     }
 
@@ -450,7 +454,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
       } else {
         console.warn(
           `Failed to send premium email for ${userID}:`,
-          result.error
+          result.error,
         );
       }
     } catch (err) {
@@ -464,7 +468,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
         "Provolo Plus Activated!",
         "You've taken a big step towards landing more clients and building the career you want.",
         "/proposal",
-        NotificationCategory.SUBSCRIPTION
+        NotificationCategory.SUBSCRIPTION,
       );
     } catch (err) {
       console.error(`Error sending notification for ${userID}:`, err);
@@ -481,7 +485,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
       } catch (err) {
         console.warn(
           `Warning: Failed to archive quota history for user ${userID} before downgrade:`,
-          err
+          err,
         );
       }
 
@@ -495,7 +499,7 @@ async function handleOrderUpdated(data: Record<string, any>) {
       await createQuotaHistoryFromTier(userID, DEFAULT_TIER_ID);
     } else {
       console.log(
-        `User ${userID} tier not affected by ${status} status (current tier: ${currentTierID}, order tier: ${tier.slug})`
+        `User ${userID} tier not affected by ${status} status (current tier: ${currentTierID}, order tier: ${tier.slug})`,
       );
     }
   }
@@ -565,6 +569,6 @@ async function archiveQuotaHistory(userID: string) {
   await archiveDocRef.set(archiveData);
 
   console.log(
-    `Successfully archived quota history for user ${userID} (tier: ${currentQuota.tierId})`
+    `Successfully archived quota history for user ${userID} (tier: ${currentQuota.tierId})`,
   );
 }

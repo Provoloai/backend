@@ -16,20 +16,15 @@ import { UAParser } from "ua-parser-js";
 
 import type { NewUser, User } from "../types/user.ts";
 import type { Request, Response } from "express";
-import type { Timestamp } from "firebase-admin/firestore";
 import type { DecodedIdToken, UserRecord } from "firebase-admin/auth";
 import { NotificationCategory } from "../types/notification.ts";
-
-// Generates a 6-digit OTP code for email verification
-function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// Removes sensitive OTP fields from user object before sending to frontend
-function createSafeUserObject(user: User): Omit<User, "otp" | "otpExpires"> {
-  const { otp, otpExpires, ...safeUser } = user;
-  return safeUser;
-}
+import {
+  createSafeUserObject,
+  generateOTP,
+  getUserByUserId,
+  mapFirebaseProvider,
+} from "../utils/user.utils.ts";
+import { validateUsername } from "../utils/validation.utils.ts";
 
 // Generates and stores a new OTP code for email verification, then sends it via email (expires after 15 minutes)
 export async function generateAndSendOTP(
@@ -80,14 +75,20 @@ async function recordLoginHistory(
       req.ip ||
       "Unknown";
 
-    await db.collection("users").doc(userId).collection("login_history").add({
-      device: deviceName,
-      browser: browserName,
-      os: osName,
-      ip,
-      userAgent,
-      timestamp: new Date(),
-    });
+    const usersRef = db.collection("users");
+    const userQuery = usersRef.where("userId", "==", userId).limit(1);
+    const docs = await userQuery.get();
+
+    if (!docs.empty && docs.docs[0]) {
+      await docs.docs[0].ref.collection("login_history").add({
+        device: deviceName,
+        browser: browserName,
+        os: osName,
+        ip,
+        userAgent,
+        timestamp: new Date(),
+      });
+    }
   } catch (error) {
     console.error("Error recording login history:", error);
   }
@@ -153,7 +154,6 @@ export async function login(req: Request, res: Response) {
     }
 
     const isProduction = process.env.NODE_ENV === "production";
-    console.log("isProduction:", isProduction);
 
     const COOKIE_OPTIONS = {
       maxAge: 5 * 24 * 60 * 60 * 1000,
@@ -163,47 +163,24 @@ export async function login(req: Request, res: Response) {
       secure: true,
     } as const;
 
-    console.log("Setting cookie with options:", COOKIE_OPTIONS);
-
     res.cookie("session", cookie, COOKIE_OPTIONS);
     res.cookie("session_token", activeSessionToken, COOKIE_OPTIONS);
 
-    const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", token.uid).limit(1);
-    const docs = await userQuery.get();
+    // Get user using helper
+    const userResult = await getUserByUserId(token.uid, res);
+    if (!userResult) return; // Response handled by helper
 
-    if (docs.empty || docs.docs.length === 0) {
-      return res
-        .status(403)
-        .json(
-          newErrorResponse(
-            "Account Setup Required",
-            "Your account is not properly set up. Please contact support or sign up again to complete your account setup."
-          )
-        );
-    }
+    const { doc, data } = userResult;
 
-    const doc = docs.docs[0];
+    // Check account setup (redundant with getUserByUserId returning null but explicit check in original code)
     if (!doc) {
-      return res
-        .status(403)
-        .json(
-          newErrorResponse(
-            "Account Setup Required",
-            "Your account is not properly set up. Please contact support or sign up again to complete your account setup."
-          )
-        );
+      // Should be caught by getUserByUserId, but for safety
+      return;
     }
 
     const firebaseProvider = token.firebase.sign_in_provider;
-    const currentProvider =
-      firebaseProvider === "password"
-        ? "email"
-        : firebaseProvider === "google.com"
-        ? "google"
-        : firebaseProvider;
+    const currentProvider = mapFirebaseProvider(firebaseProvider);
 
-    const data = doc.data();
     const providers = data.providers || [];
 
     // Update providers and activeSessionToken
@@ -219,30 +196,10 @@ export async function login(req: Request, res: Response) {
 
     const emailVerified = data.emailVerified === true;
     const user: User = {
+      ...data,
       id: doc.id,
-      userId: data.userId,
-      email: data.email,
-      displayName: data.displayName || null,
-      tierId: data.tierId,
-      mailerliteId: data.mailerliteId || null,
-      polarId: data.polarId || null,
-      portfolioLink: data.portfolioLink || null,
-      professionalTitle: data.professionalTitle || null,
-      emailVerified,
-      otp: data.otp || null,
-      otpExpires: data.otpExpires
-        ? data.otpExpires instanceof Date
-          ? data.otpExpires
-          : new Date((data.otpExpires as Timestamp).seconds * 1000)
-        : null,
-      providers,
+      providers, // Ensure updated providers are returned
       activeSessionToken,
-      createdAt: data.createdAt
-        ? data.createdAt instanceof Date
-          ? data.createdAt
-          : new Date((data.createdAt as Timestamp).seconds * 1000)
-        : undefined,
-      updatedAt: new Date(),
     };
 
     return res
@@ -286,6 +243,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const usersRef = db.collection("users");
 
     let decodedUserInfo: DecodedIdToken | null = null;
     try {
@@ -317,88 +275,44 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
     }
 
-    const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", userID).limit(1);
-    const docs = await userQuery.get();
+    // Check if user exists
+    const userResult = await getUserByUserId(userID);
+    const now: Date = new Date();
+
+    // Determine provider
+    const firebaseProvider = decodedUserInfo.firebase.sign_in_provider;
+    const currentProvider = mapFirebaseProvider(firebaseProvider);
 
     let userData: User | null = null;
     let isNewUser: boolean = false;
-    const now: Date = new Date();
+    let userDocRef: FirebaseFirestore.DocumentReference;
 
-    if (!docs.empty && docs.docs.length > 0) {
-      // Existing user - retrieve their data
-      const existingUserDoc = docs.docs[0];
-      if (existingUserDoc) {
-        const existingUserData: User = existingUserDoc.data() as User;
-        const emailVerified = existingUserData.emailVerified === true;
+    if (userResult) {
+      // Existing User Logic
+      const existingUserDoc = userResult.doc;
+      const existingUserData = userResult.data;
+      userDocRef = existingUserDoc.ref;
 
-        const firebaseProvider = decodedUserInfo.firebase.sign_in_provider;
-        const currentProvider =
-          firebaseProvider === "password"
-            ? "email"
-            : firebaseProvider === "google.com"
-            ? "google"
-            : firebaseProvider;
-
-        const providers = existingUserData.providers || [];
-        if (!providers.includes(currentProvider)) {
-          await existingUserDoc.ref.update({
-            providers: [...providers, currentProvider],
-            updatedAt: now,
-          });
-          providers.push(currentProvider);
-        }
-
-        userData = {
-          id: existingUserDoc.id,
-          userId: userID,
-          email: userRecord.email!,
-          displayName: userRecord.displayName || null,
-          tierId: existingUserData.tierId || starterTierId,
-          mailerliteId: null,
-          polarId: existingUserData.polarId || null,
-          portfolioLink: existingUserData.portfolioLink || null,
-          professionalTitle: existingUserData.professionalTitle || null,
-          emailVerified: existingUserData.emailVerified === true,
-          otp: existingUserData.otp || null,
-          otpExpires: existingUserData.otpExpires
-            ? existingUserData.otpExpires instanceof Date
-              ? existingUserData.otpExpires
-              : new Date(
-                  (existingUserData.otpExpires as Timestamp).seconds * 1000
-                )
-            : null,
-          providers,
-          activeSessionToken: null, // Will be set after cookie creation
-          createdAt: existingUserData.createdAt
-            ? existingUserData.createdAt instanceof Date
-              ? existingUserData.createdAt
-              : new Date(
-                  (existingUserData.createdAt as Timestamp).seconds * 1000
-                )
-            : now,
-          updatedAt: existingUserData.updatedAt
-            ? existingUserData.updatedAt instanceof Date
-              ? existingUserData.updatedAt
-              : new Date(
-                  (existingUserData.updatedAt as Timestamp).seconds * 1000
-                )
-            : now,
-        };
+      const providers = existingUserData.providers || [];
+      if (!providers.includes(currentProvider)) {
+        await userDocRef.update({
+          providers: [...providers, currentProvider],
+          updatedAt: now,
+        });
+        providers.push(currentProvider);
       }
+
+      userData = {
+        ...existingUserData,
+        id: existingUserDoc.id,
+        providers, // Ensure updated providers are used
+        activeSessionToken: null, // Set later
+      };
     } else {
-      // New user - create account with starter tier and send verification email
+      // New User Logic
       isNewUser = true;
       const otp = generateOTP();
       const otpExpires = new Date(Date.now() + 15 * 60 * 1000);
-
-      const firebaseProvider = decodedUserInfo.firebase.sign_in_provider;
-      const currentProvider =
-        firebaseProvider === "password"
-          ? "email"
-          : firebaseProvider === "google.com"
-          ? "google"
-          : firebaseProvider;
 
       const newUserData: NewUser = {
         userId: userID,
@@ -413,17 +327,21 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         otp,
         otpExpires,
         providers: [currentProvider],
-        activeSessionToken: null, // Will be set after cookie creation
+        activeSessionToken: null,
         createdAt: now,
         updatedAt: now,
       };
 
       const docRef = await usersRef.add(newUserData);
+      userDocRef = docRef;
       userData = {
         id: docRef.id,
         ...newUserData,
       };
 
+      // Async post-signup tasks (Polar, Quota, Email, Notification)
+      // We don't await these to speed up response, or we await if critical.
+      // Original code awaited them.
       try {
         const polarCustomerResult = await createPolarCustomer({
           userId: userID,
@@ -455,7 +373,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         );
       }
 
-      // Send welcome notification
       try {
         await sendNotificationToUser(
           userID,
@@ -472,6 +389,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       }
     }
 
+    // Session Management
     let cookie;
     let activeSessionToken: string;
     try {
@@ -484,17 +402,13 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       activeSessionToken = crypto.randomUUID();
 
       // Record device history
-      await recordLoginHistory(userID, req, db);
+      await recordLoginHistory(userID, req, db); // Provided recordLoginHistory is in scope or imported
 
-      // Update user with activeSessionToken
-      const userDocQuery = usersRef.where("userId", "==", userID).limit(1);
-      const userDocs = await userDocQuery.get();
-      if (!userDocs.empty && userDocs.docs[0]) {
-        await userDocs.docs[0].ref.update({
-          activeSessionToken,
-          updatedAt: new Date(),
-        });
-      }
+      // Update user with activeSessionToken using the ref we already have
+      await userDocRef.update({
+        activeSessionToken,
+        updatedAt: new Date(),
+      });
 
       // Update userData with the token
       if (userData) {
@@ -502,7 +416,7 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
         userData.updatedAt = new Date();
       }
     } catch (err) {
-      console.error("Signup Error:", err);
+      console.error("Signup/Session Error:", err);
       return res
         .status(500)
         .json(
@@ -514,7 +428,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
     }
 
     const isProduction = process.env.NODE_ENV === "production";
-    console.log("isProduction:", isProduction);
 
     const COOKIE_OPTIONS = {
       maxAge: 5 * 24 * 60 * 60 * 1000,
@@ -524,7 +437,6 @@ export async function signupOrEnsureUser(req: Request, res: Response) {
       secure: true,
     } as const;
 
-    console.log("Setting cookie with options:", COOKIE_OPTIONS);
     res.cookie("session", cookie, COOKIE_OPTIONS);
     res.cookie("session_token", activeSessionToken, COOKIE_OPTIONS);
 
@@ -560,7 +472,6 @@ export async function verifySession(req: Request, res: Response) {
   try {
     const app = getFirebaseApp();
     const auth = getAuth(app);
-    const db = getFirestore(app);
 
     const sessionCookie = getCookie(req, "session");
     let decodedUserInfo: DecodedIdToken | null = null;
@@ -599,13 +510,12 @@ export async function verifySession(req: Request, res: Response) {
       }
     }
 
-    const usersRef = db.collection("users");
-    const userQuery = usersRef
-      .where("userId", "==", decodedUserInfo.uid)
-      .limit(1);
-    const docs = await userQuery.get();
-    const doc = docs.docs[0];
-    if (!doc) {
+    const { uid } = decodedUserInfo;
+    // Get user using helper
+    const userResult = await getUserByUserId(uid);
+
+    // Explicit 403 checks for verify logic (similar to original) but utilizing the helper
+    if (!userResult) {
       return res
         .status(403)
         .json(
@@ -615,7 +525,8 @@ export async function verifySession(req: Request, res: Response) {
           )
         );
     }
-    const data = doc.data();
+
+    const { doc, data } = userResult;
 
     // Single-device enforcement: check if session_token matches stored activeSessionToken
     const sessionTokenCookie = getCookie(req, "session_token");
@@ -631,36 +542,9 @@ export async function verifySession(req: Request, res: Response) {
         );
     }
 
-    const emailVerified = data.emailVerified === true;
     const user: User = {
+      ...data,
       id: doc.id,
-      userId: data.userId,
-      email: data.email,
-      displayName: data.displayName || null,
-      tierId: data.tierId,
-      polarId: data.polarId || null,
-      mailerliteId: data.mailerliteId || null,
-      portfolioLink: data.portfolioLink || null,
-      professionalTitle: data.professionalTitle || null,
-      emailVerified,
-      otp: data.otp || null,
-      otpExpires: data.otpExpires
-        ? data.otpExpires instanceof Date
-          ? data.otpExpires
-          : new Date((data.otpExpires as Timestamp).seconds * 1000)
-        : null,
-      providers: data.providers || [],
-      activeSessionToken: data.activeSessionToken || null,
-      createdAt: data.createdAt
-        ? data.createdAt instanceof Date
-          ? data.createdAt
-          : new Date((data.createdAt as Timestamp).seconds * 1000)
-        : undefined,
-      updatedAt: data.updatedAt
-        ? data.updatedAt instanceof Date
-          ? data.updatedAt
-          : new Date((data.updatedAt as Timestamp).seconds * 1000)
-        : undefined,
     };
 
     return res
@@ -738,26 +622,11 @@ export async function updateUsername(req: Request, res: Response) {
   try {
     const { username } = req.body;
 
-    if (
-      !username ||
-      typeof username !== "string" ||
-      username.length < 3 ||
-      !/^[a-zA-Z0-9_\- ]+$/.test(username) ||
-      username.startsWith("-") ||
-      username.endsWith("-") ||
-      username.startsWith(" ") ||
-      username.endsWith(" ") ||
-      username.includes("--") ||
-      username.includes("__")
-    ) {
+    const validation = validateUsername(username);
+    if (!validation.isValid) {
       return res
         .status(400)
-        .json(
-          newErrorResponse(
-            "Invalid Username",
-            "Username must be at least 3, use only letters, numbers, underscores, hyphens, or spaces, cannot start or end with hyphens or spaces, and cannot contain consecutive hyphens or consecutive underscores."
-          )
-        );
+        .json(newErrorResponse("Invalid Username", validation.error!));
     }
 
     if (!req.userID || !req.userEmail) {
@@ -793,24 +662,15 @@ export async function updateUsername(req: Request, res: Response) {
         );
     }
 
-    let userDoc;
+    // Use helper to get user for the update loop
+    // Note: The original logic fetched, updated, then fetched again.
+    // We can simplify by just getting ref first.
+    const userResult = await getUserByUserId(req.userID, res);
+    if (!userResult) return;
+
+    const { doc: userDoc, data: userData } = userResult;
+
     try {
-      const usersRef = db.collection("users");
-      const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
-      const docs = await userQuery.get();
-
-      if (docs.empty || !docs.docs[0]) {
-        return res
-          .status(404)
-          .json(
-            newErrorResponse(
-              "User Not Found",
-              "Your user record could not be found. Please contact support."
-            )
-          );
-      }
-
-      userDoc = docs.docs[0];
       await userDoc.ref.update({ displayName: username });
     } catch (firestoreErr) {
       console.error("Firestore update error:", firestoreErr);
@@ -819,7 +679,7 @@ export async function updateUsername(req: Request, res: Response) {
         .json(
           newErrorResponse(
             "Database Update Failed",
-            "Unable to update your username in our database. Please contact support."
+            "Unable to update your username in our database."
           )
         );
     }
@@ -869,46 +729,17 @@ export async function updateUsername(req: Request, res: Response) {
     }
 
     try {
-      const usersRef = db.collection("users");
-      const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
-      const docs = await userQuery.get();
-
-      if (docs.empty || !docs.docs[0]) {
+      // Fetch updated user data
+      const updatedUserResult = await getUserByUserId(req.userID);
+      if (!updatedUserResult) {
         throw new Error("User document not found after username update.");
       }
 
-      const userDoc = docs.docs[0];
-      const userData = userDoc.data();
+      const { doc: updatedDoc, data: updatedData } = updatedUserResult;
 
       const user: User = {
-        id: userDoc.id,
-        userId: userData.userId,
-        email: userData.email,
-        displayName: userData.displayName || null,
-        tierId: userData.tierId,
-        polarId: userData.polarId || null,
-        mailerliteId: userData.mailerliteId || null,
-        portfolioLink: userData.portfolioLink || null,
-        professionalTitle: userData.professionalTitle || null,
-        emailVerified: userData.emailVerified === true,
-        otp: userData.otp || null,
-        otpExpires: userData.otpExpires
-          ? userData.otpExpires instanceof Date
-            ? userData.otpExpires
-            : new Date((userData.otpExpires as Timestamp).seconds * 1000)
-          : null,
-        providers: userData.providers || [],
-        activeSessionToken: userData.activeSessionToken || null,
-        createdAt: userData.createdAt
-          ? userData.createdAt instanceof Date
-            ? userData.createdAt
-            : new Date((userData.createdAt as Timestamp).seconds * 1000)
-          : undefined,
-        updatedAt: userData.updatedAt
-          ? userData.updatedAt instanceof Date
-            ? userData.updatedAt
-            : new Date((userData.updatedAt as Timestamp).seconds * 1000)
-          : undefined,
+        ...updatedData,
+        id: updatedDoc.id,
       };
 
       return res
@@ -973,55 +804,22 @@ export async function updateProviders(req: Request, res: Response) {
         );
     }
 
-    const app = getFirebaseApp();
-    const db = getFirestore(app);
-    const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
-    const docs = await userQuery.get();
+    // Use helper to get user
+    const userResult = await getUserByUserId(req.userID, res);
+    if (!userResult) return;
 
-    if (docs.empty || !docs.docs[0]) {
-      return res
-        .status(404)
-        .json(
-          newErrorResponse(
-            "User Not Found",
-            "Your user record could not be found. Please contact support."
-          )
-        );
-    }
+    const { doc, data } = userResult;
 
-    const userDoc = docs.docs[0];
-    await userDoc.ref.update({
+    await doc.ref.update({
       providers,
       updatedAt: new Date(),
     });
 
-    const userData = userDoc.data();
     const user: User = {
-      id: userDoc.id,
-      userId: userData.userId,
-      email: userData.email,
-      displayName: userData.displayName || null,
-      tierId: userData.tierId,
-      polarId: userData.polarId || null,
-      mailerliteId: userData.mailerliteId || null,
-      portfolioLink: userData.portfolioLink || null,
-      professionalTitle: userData.professionalTitle || null,
-      emailVerified: userData.emailVerified === true,
-      otp: userData.otp || null,
-      otpExpires: userData.otpExpires
-        ? userData.otpExpires instanceof Date
-          ? userData.otpExpires
-          : new Date((userData.otpExpires as Timestamp).seconds * 1000)
-        : null,
+      ...data,
+      id: doc.id,
       providers, // Use the updated providers
-      activeSessionToken: userData.activeSessionToken || null,
-      createdAt: userData.createdAt
-        ? userData.createdAt instanceof Date
-          ? userData.createdAt
-          : new Date((userData.createdAt as Timestamp).seconds * 1000)
-        : undefined,
-      updatedAt: new Date(), // Use the new update time
+      updatedAt: new Date(),
     };
 
     return res
@@ -1106,25 +904,14 @@ export async function updateProfile(req: Request, res: Response) {
     }
 
     const app = getFirebaseApp();
-    const db = getFirestore(app);
     const now = new Date();
 
-    const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
-    const docs = await userQuery.get();
+    // Use helper to get user
+    const userResult = await getUserByUserId(req.userID, res);
+    if (!userResult) return;
 
-    if (docs.empty || !docs.docs[0]) {
-      return res
-        .status(404)
-        .json(
-          newErrorResponse(
-            "User Not Found",
-            "Your user record could not be found. Please contact support."
-          )
-        );
-    }
+    const { doc: userDoc, data: userData } = userResult;
 
-    const userDoc = docs.docs[0];
     const updateData: any = { updatedAt: now };
 
     if (portfolio_link !== undefined) {
@@ -1139,7 +926,6 @@ export async function updateProfile(req: Request, res: Response) {
 
     // Check for changes and send "Knowledge Base Updated" notification
     try {
-      const userData = userDoc.data();
       const oldPortfolio = userData.portfolioLink || null;
       const oldTitle = userData.professionalTitle || null;
 
@@ -1172,51 +958,20 @@ export async function updateProfile(req: Request, res: Response) {
       );
     }
 
-    const updatedDocs = await userQuery.get();
-    const updatedUserDoc = updatedDocs.docs[0];
-
-    if (!updatedUserDoc) {
+    // Refetch updated data (simpler than manual merge for complex objects, though merge is faster)
+    const updatedUserResult = await getUserByUserId(req.userID);
+    if (!updatedUserResult) {
       return res
         .status(404)
         .json(
-          newErrorResponse(
-            "User Not Found",
-            "Your user record could not be found after update. Please contact support."
-          )
+          newErrorResponse("User Not Found", "User record lost after update?")
         );
     }
-
-    const userData = updatedUserDoc.data();
+    const { doc: updatedDoc, data: updatedData } = updatedUserResult;
 
     const user: User = {
-      id: updatedUserDoc.id,
-      userId: userData.userId,
-      email: userData.email,
-      displayName: userData.displayName || null,
-      tierId: userData.tierId,
-      polarId: userData.polarId || null,
-      mailerliteId: userData.mailerliteId || null,
-      portfolioLink: userData.portfolioLink || null,
-      professionalTitle: userData.professionalTitle || null,
-      emailVerified: userData.emailVerified === true,
-      otp: userData.otp || null,
-      otpExpires: userData.otpExpires
-        ? userData.otpExpires instanceof Date
-          ? userData.otpExpires
-          : new Date((userData.otpExpires as Timestamp).seconds * 1000)
-        : null,
-      providers: userData.providers || [],
-      activeSessionToken: userData.activeSessionToken || null,
-      createdAt: userData.createdAt
-        ? userData.createdAt instanceof Date
-          ? userData.createdAt
-          : new Date((userData.createdAt as Timestamp).seconds * 1000)
-        : undefined,
-      updatedAt: userData.updatedAt
-        ? userData.updatedAt instanceof Date
-          ? userData.updatedAt
-          : new Date((userData.updatedAt as Timestamp).seconds * 1000)
-        : undefined,
+      ...updatedData,
+      id: updatedDoc.id,
     };
 
     return res
@@ -1271,26 +1026,13 @@ export async function verifyEmail(req: Request, res: Response) {
     }
 
     const app = getFirebaseApp();
-    const db = getFirestore(app);
     const now = new Date();
 
-    const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
-    const docs = await userQuery.get();
+    // Use helper to get user
+    const userResult = await getUserByUserId(req.userID, res);
+    if (!userResult) return;
 
-    if (docs.empty || !docs.docs[0]) {
-      return res
-        .status(404)
-        .json(
-          newErrorResponse(
-            "User Not Found",
-            "Your user record could not be found. Please contact support."
-          )
-        );
-    }
-
-    const userDoc = docs.docs[0];
-    const userData = userDoc.data();
+    const { doc: userDoc, data: userData } = userResult;
 
     if (userData.emailVerified === true) {
       return res
@@ -1314,11 +1056,8 @@ export async function verifyEmail(req: Request, res: Response) {
         );
     }
 
-    const otpExpires = userData.otpExpires
-      ? userData.otpExpires instanceof Date
-        ? userData.otpExpires
-        : new Date((userData.otpExpires as Timestamp).seconds * 1000)
-      : null;
+    // Helper already converts Timestamp objects to Date, so simple check
+    const otpExpires = userData.otpExpires;
 
     if (!otpExpires || otpExpires < now) {
       return res
@@ -1350,46 +1089,22 @@ export async function verifyEmail(req: Request, res: Response) {
       updatedAt: now,
     });
 
-    const updatedDocs = await userQuery.get();
-    const updatedUserDoc = updatedDocs.docs[0];
-
-    if (!updatedUserDoc) {
+    const updatedUserResult = await getUserByUserId(req.userID);
+    if (!updatedUserResult) {
       return res
         .status(404)
         .json(
           newErrorResponse(
             "User Not Found",
-            "Your user record could not be found after verification. Please contact support."
+            "User record lost after verification?"
           )
         );
     }
+    const { doc: updatedDoc, data: updatedData } = updatedUserResult;
 
-    const updatedData = updatedUserDoc.data();
     const user: User = {
-      id: updatedUserDoc.id,
-      userId: updatedData.userId,
-      email: updatedData.email,
-      displayName: updatedData.displayName || null,
-      tierId: updatedData.tierId,
-      polarId: updatedData.polarId || null,
-      mailerliteId: updatedData.mailerliteId || null,
-      portfolioLink: updatedData.portfolioLink || null,
-      professionalTitle: updatedData.professionalTitle || null,
-      emailVerified: true,
-      otp: null,
-      otpExpires: null,
-      providers: updatedData.providers || [],
-      activeSessionToken: updatedData.activeSessionToken || null,
-      createdAt: updatedData.createdAt
-        ? updatedData.createdAt instanceof Date
-          ? updatedData.createdAt
-          : new Date((updatedData.createdAt as Timestamp).seconds * 1000)
-        : undefined,
-      updatedAt: updatedData.updatedAt
-        ? updatedData.updatedAt instanceof Date
-          ? updatedData.updatedAt
-          : new Date((updatedData.updatedAt as Timestamp).seconds * 1000)
-        : undefined,
+      ...updatedData,
+      id: updatedDoc.id,
     };
 
     return res
@@ -1433,23 +1148,11 @@ export async function resendVerificationOTP(req: Request, res: Response) {
     const app = getFirebaseApp();
     const db = getFirestore(app);
 
-    const usersRef = db.collection("users");
-    const userQuery = usersRef.where("userId", "==", req.userID).limit(1);
-    const docs = await userQuery.get();
+    // Use helper to get user
+    const userResult = await getUserByUserId(req.userID, res);
+    if (!userResult) return;
 
-    if (docs.empty || !docs.docs[0]) {
-      return res
-        .status(404)
-        .json(
-          newErrorResponse(
-            "User Not Found",
-            "Your user record could not be found. Please contact support."
-          )
-        );
-    }
-
-    const userDoc = docs.docs[0];
-    const userData = userDoc.data();
+    const { data: userData } = userResult;
 
     if (userData.emailVerified === true) {
       return res

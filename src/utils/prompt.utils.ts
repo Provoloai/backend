@@ -25,7 +25,7 @@ import type {
  * Ensures all required fields exist and keyPoints is an array
  */
 export function validateProposalResponse(
-  proposal: ProposalResponse
+  proposal: ProposalResponse,
 ): ProposalResponse {
   // Ensure keyPoints is an array
   if (!Array.isArray(proposal.keyPoints)) {
@@ -62,7 +62,7 @@ export function validateProposalResponse(
 export function createProposalMDX(
   proposal: ProposalResponse,
   clientName: string,
-  portfolioLink?: string | null
+  portfolioLink?: string | null,
 ): string {
   // Validate and normalize the proposal
   const validatedProposal = validateProposalResponse({ ...proposal });
@@ -80,13 +80,13 @@ export function createProposalMDX(
   let hookText = validatedProposal.hook.trim();
   const escapedClientName = sanitizedClientName.replace(
     /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
+    "\\$&",
   );
 
   // Remove "Hey [client name]," from the beginning of the hook
   const heyWithNamePattern = new RegExp(
     `^hey\\s+${escapedClientName}\\s*,?\\s*`,
-    "i"
+    "i",
   );
   if (heyWithNamePattern.test(hookText)) {
     hookText = hookText.replace(heyWithNamePattern, "").trim();
@@ -152,7 +152,7 @@ function toDate(firestoreTimestamp: any): Date {
 
 // Check optimizer quota for the user's current tier and usage
 export async function checkOptimizerQuotaForUser(
-  userId: string
+  userId: string,
 ): Promise<PromptLimitResult> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -166,13 +166,13 @@ export async function checkOptimizerQuotaForUser(
 
     if (userSnap.empty || !userSnap.docs[0])
       throw new Error(
-        "User not found. Please sign in again or contact support if this issue persists."
+        "User not found. Please sign in again or contact support if this issue persists.",
       );
     const user = userSnap.docs[0].data() as { tierId?: string };
     const tierId = user.tierId || process.env.DEFAULT_TIER_ID;
     if (!tierId)
       throw new Error(
-        "Tier ID not found. Please contact support, an error occurred."
+        "Tier ID not found. Please contact support, an error occurred.",
       );
 
     // 2. Get tier doc
@@ -180,7 +180,7 @@ export async function checkOptimizerQuotaForUser(
     if (!tierSnap.exists) throw new Error("Tier not found");
     const tier = tierSnap.data() as Tier;
     const feature = tier.features.find(
-      (f) => f.slug === "upwork_profile_optimizer"
+      (f) => f.slug === "upwork_profile_optimizer",
     );
     if (!feature) throw new Error("Optimizer feature not found in tier");
 
@@ -196,7 +196,7 @@ export async function checkOptimizerQuotaForUser(
       const quota = quotaSnap.data() as QuotaHistory;
       //   TODO: make the feature slug a constant somewhere
       const quotaFeature = quota.features.find(
-        (f) => f.slug === "upwork_profile_optimizer"
+        (f) => f.slug === "upwork_profile_optimizer",
       );
       if (quotaFeature) {
         // Reset if new interval
@@ -217,7 +217,7 @@ export async function checkOptimizerQuotaForUser(
 }
 
 export function optimizerPrompt(inputContent: string): string {
-  return `You are a specialized AI portfolio consultant trained to optimize freelancer profiles (like those on Upwork or personal websites).\n\nYour goal is to help freelancers attract more clients, improve clarity, and align better with their niche and target market. Use the content provided to audit and improve the freelancer's portfolio. Assume it is real-world client-facing material.\n\nFreelancer Portfolio Content:\n---\n${inputContent}\n---\n\nIMPORTANT: You MUST return your response as a valid JSON object that matches this exact schema:\n\n{\n\"weaknessesAndOptimization\": \"string - markdown content for weaknesses analysis\",\n\"optimizedProfileOverview\": \"string - markdown content for optimized profile\", \n\"suggestedProjectTitles\": \"string - markdown content for project suggestions\",\n\"recommendedVisuals\": \"string - markdown content for visual recommendations\",\n\"beforeAfterComparison\": \"string - markdown content for before/after comparison\"\n}\n\nPerform the following analysis and generation tasks:\n\n1. **weaknessesAndOptimization:**\n- Identify key weaknesses in the profile, including:\n  - Generic or vague language\n  - Lack of client-centric focus\n  - Weak formatting or visual storytelling\n  - Poor structure, tone mismatch, or niche confusion\n- Provide actionable, step-by-step suggestions to improve each weakness\n- Reference modern best practices for top-performing freelancer profiles\n\n2. **optimizedProfileOverview:**\n- Rewrite the profile overview to be compelling, client-focused, and persuasive\n- Clearly communicate what the freelancer does, who they serve, and how they deliver value\n- Use professional but friendly language, and include emojis to increase scannability where appropriate\n- Ensure it reflects the freelancer's unique personality and competitive edge\n\n3. **suggestedProjectTitles:**\n- Provide 3–5 clickable, attractive project titles tailored to their niche\n- Recommend a strong, repeatable case study format such as:\n  - Client – Challenge – Solution – Result\n  - Problem – Process – Outcome – Testimonial\n- Make the titles benefit-driven and aligned with common client search queries\n\n4. **recommendedVisuals:**\n- Suggest the ideal types of visuals (mockups, icons, before/after shots, testimonials, results snapshots, etc.)\n- Recommend a visual hierarchy for the portfolio page:\n  - Clear headline & subheading\n  - Profile image or intro video\n  - Top 3 projects\n  - Testimonials and client logos\n  - CTA section (e.g., \"Let's Work Together\")\n\n5. **beforeAfterComparison:**\n- Extract the original profile headline/overview (if present)\n- Show a side-by-side comparison with your rewritten version\n- Briefly explain why the \"after\" version is more compelling and likely to convert\n\nEach section should contain well-formatted markdown with appropriate headings (###), lists (-, *), bold (**), and other markdown formatting for readability and web display.\n\nCRITICAL: Your response must be ONLY a valid JSON object. Do not include any text before or after the JSON. Start directly with { and end with }.`;
+  return `You are a specialized AI portfolio consultant trained to optimize freelancer profiles (like those on Upwork or personal websites).\n\nYour goal is to help freelancers attract more clients, improve clarity, and align better with their niche and target market. Use the content provided to audit and improve the freelancer's portfolio. Assume it is real-world client-facing material.\n\nFreelancer Portfolio Content:\n---\n${inputContent}\n---\n\nIMPORTANT: You MUST return your response as a valid JSON object that matches this exact schema:\n\n{\n\"weaknessesAndOptimization\": \"string - markdown content for weaknesses analysis\",\n\"optimizedProfileOverview\": \"string - markdown content for optimized profile\", \n\"suggestedProjectTitles\": \"string - markdown content for project suggestions\",\n\"recommendedVisuals\": \"string - markdown content for visual recommendations\",\n\"beforeAfterComparison\": \"string - markdown content for before/after comparison\"\n}\n\nPerform the following analysis and generation tasks:\n\n1. **weaknessesAndOptimization:**\n- Identify key weaknesses in the profile, including:\n  - Generic or vague language\n  - Lack of client-centric focus\n  - Weak formatting or visual storytelling\n  - Poor structure, tone mismatch, or niche confusion\n- Provide actionable, step-by-step suggestions to improve each weakness\n- Reference modern best practices for top-performing freelancer profiles\n\n2. **optimizedProfileOverview:**\n- Rewrite the profile overview to be compelling, client-focused, and persuasive\n- Clearly communicate what the freelancer does, who they serve, and how they deliver value\n- Use professional but friendly language\n- Ensure it reflects the freelancer's unique personality and competitive edge\n\n3. **suggestedProjectTitles:**\n- Provide 3–5 clickable, attractive project titles tailored to their niche\n- Recommend a strong, repeatable case study format such as:\n  - Client – Challenge – Solution – Result\n  - Problem – Process – Outcome – Testimonial\n- Make the titles benefit-driven and aligned with common client search queries\n\n4. **recommendedVisuals:**\n- Suggest the ideal types of visuals (mockups, icons, before/after shots, testimonials, results snapshots, etc.)\n- Recommend a visual hierarchy for the portfolio page:\n  - Clear headline & subheading\n  - Profile image or intro video\n  - Top 3 projects\n  - Testimonials and client logos\n  - CTA section (e.g., \"Let's Work Together\")\n\n5. **beforeAfterComparison:**\n- Extract the original profile headline/overview (if present)\n- Show a side-by-side comparison with your rewritten version\n- Briefly explain why the \"after\" version is more compelling and likely to convert\n\nEach section should contain well-formatted markdown with appropriate headings (###), lists (-, *), bold (**), and other markdown formatting for readability and web display.\n\nCRITICAL: Your response must be ONLY a valid JSON object. Do not include any text before or after the JSON. Start directly with { and end with }.`;
 }
 
 export function optimizerSystemInstruction(): string {
@@ -235,7 +235,7 @@ export function linkedinOptimizerSystemInstruction(): string {
 // Store optimizer history (Upwork / LinkedIn) in Firestore
 export async function storeOptimizerHistory(
   data: OptimizerHistoryCreate,
-  cap: number = 5
+  cap: number = 5,
 ): Promise<string> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -277,7 +277,7 @@ export async function storeOptimizerHistory(
     } catch (err) {
       console.error(
         "storeOptimizerHistory transaction failed; falling back to direct write",
-        err
+        err,
       );
       await preCreatedRef.set(history);
       createdId = preCreatedRef.id;
@@ -303,7 +303,7 @@ export async function storeOptimizerHistory(
         } catch (cleanupErr) {
           console.warn(
             "Overflow cleanup skipped for optimizer history",
-            cleanupErr
+            cleanupErr,
           );
         }
       })().catch((err) => {
@@ -323,7 +323,7 @@ export async function getUserOptimizerHistory(
   page: number = 1,
   limit: number = 10,
   search?: string,
-  optimizerType?: OptimizerType
+  optimizerType?: OptimizerType,
 ): Promise<{
   records: OptimizerHistoryRecord[];
   total: number;
@@ -361,8 +361,8 @@ export async function getUserOptimizerHistory(
           typeof record.originalInput === "string"
             ? record.originalInput
             : record.originalInput
-            ? Object.values(record.originalInput).join(" ")
-            : "";
+              ? Object.values(record.originalInput).join(" ")
+              : "";
         const haystack = [
           originalInputString,
           record.response.optimizedProfileOverview,
@@ -387,7 +387,7 @@ export async function getUserOptimizerHistory(
 // Get single optimizer history record by ID (ensures ownership)
 export async function getOptimizerHistoryById(
   userId: string,
-  recordId: string
+  recordId: string,
 ): Promise<OptimizerHistoryRecord | null> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -412,7 +412,7 @@ export async function getOptimizerHistoryById(
 
 // Cleanup old optimizer history (30 days)
 export async function cleanupOldOptimizerHistory(
-  days: number = 30
+  days: number = 30,
 ): Promise<number> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -443,7 +443,7 @@ export async function cleanupOldOptimizerHistory(
 export function proposalPrompt(
   inputContent: string,
   displayName?: string,
-  portfolioLink?: string | null
+  portfolioLink?: string | null,
 ): string {
   const closingInstruction = displayName
     ? `- Closing: End by inviting the client to chat or move forward. Insert a blank line before the professional closing (e.g., "Best regards", "Looking forward to working with you", "Thank you for considering my proposal"). Then put the freelancer's name on the next line: ${displayName}`
@@ -473,7 +473,7 @@ Structure
 - Hook (1–2 sentences): Immediately grab the client's attention by showing understanding of their problem or goal. DO NOT include "Hey [Client Name]," in the hook - it will be added separately in the final format
 - Personal Touch: Reference something specific from the job post to make the proposal feel customized
 - Solution: Explain how you'll solve their problem or achieve their goal. Keep it benefit-driven
-- Bullets with Emojis: Highlight key services or advantages using short bullet points with emojis
+- Key Points: Highlight key services or advantages using short bullet points (use real bullet characters like • or -, never use emojis)
 ${portfolioInstruction}
 - Availability: Emphasize that you're available to start immediately (if true)
 - Post-Delivery Support: Mention ongoing support when relevant
@@ -481,7 +481,7 @@ ${closingInstruction}
 
 Formatting
 - Use short paragraphs (2–3 lines max)
-- Use bullet points with emojis (✅, 🚀, 🎯, ✨, 📌) to make proposals stand out
+- Use real bullet points (• or -) to make proposals stand out - DO NOT use emojis as bullet points
 - Keep it under 200–250 words unless the job requires deeper explanation
 
 IMPORTANT: You MUST return your response as a valid JSON object that matches this exact schema:
@@ -489,7 +489,7 @@ IMPORTANT: You MUST return your response as a valid JSON object that matches thi
 {
 "hook": "string - 1-2 sentences that grab attention (DO NOT include 'Hey [Client Name],' - it will be added separately)",
 "solution": "string - explanation of how you'll solve their problem",
-"keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
+"keyPoints": "array of strings - bullet points highlighting services/advantages (use plain text, no emojis)",
 "portfolioLink": "${portfolioSchemaDesc}",
 "availability": "string - availability statement",
 "support": "string - post-delivery support mention",
@@ -525,7 +525,7 @@ You MUST respond with one of these two JSON formats ONLY:
 {
   "hook": "string - 1-2 sentences that grab attention (DO NOT include 'Hey [Client Name],' - it will be added separately)",
   "solution": "string - explanation of how you'll solve their problem",
-  "keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
+  "keyPoints": "array of strings - bullet points highlighting services/advantages (use plain text, no emojis)",
   "portfolioLink": "string - portfolio URL if provided, otherwise MUST be empty string \"\". DO NOT generate or create portfolio links if none is provided.",
   "availability": "string - availability statement",
   "support": "string - post-delivery support mention",
@@ -590,7 +590,7 @@ export function isSameDay(t1: Date, t2: Date): boolean {
 
 export async function checkUserPromptLimit(
   userId: string,
-  limit = 2
+  limit = 2,
 ): Promise<PromptLimitResult> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -682,7 +682,7 @@ export async function storeProposalHistory(
   userId: string,
   proposalReq: ProposalReq,
   proposalResponse: ProposalResponse,
-  cap: number = 5
+  cap: number = 5,
 ): Promise<string> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -739,7 +739,7 @@ export async function storeProposalHistory(
     } catch (err) {
       console.error(
         "storeProposalHistory transaction failed; falling back to direct write",
-        err
+        err,
       );
       await preCreatedRef.set(proposalHistory);
       createdId = preCreatedRef.id;
@@ -771,7 +771,7 @@ export async function storeProposalHistory(
         } catch (cleanupErr) {
           console.warn(
             "Overflow cleanup skipped due to error (likely missing index)",
-            cleanupErr
+            cleanupErr,
           );
         }
       })().catch((err) => {
@@ -790,7 +790,7 @@ export async function getUserProposalHistory(
   userId: string,
   page: number = 1,
   limit: number = 10,
-  search?: string
+  search?: string,
 ): Promise<{ proposals: ProposalHistory[]; total: number; hasMore: boolean }> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -845,7 +845,7 @@ export async function getUserProposalHistory(
 
     // Sort by createdAt descending
     filteredProposals.sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
     );
 
     const total = filteredProposals.length;
@@ -868,7 +868,7 @@ export async function getUserProposalHistory(
 // Get a specific proposal by ID
 export async function getProposalById(
   userId: string,
-  proposalId: string
+  proposalId: string,
 ): Promise<ProposalHistory | null> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -901,7 +901,7 @@ export async function getProposalById(
     } catch (err) {
       console.error(
         "[getProposalById] Error fetching user portfolioLink:",
-        err
+        err,
       );
     }
 
@@ -922,8 +922,8 @@ export async function getProposalById(
       // Fetch all refinement documents
       const refinementDocs = await Promise.all(
         data.allRefinementIds.map((id: string) =>
-          db.collection("refinement_history").doc(id).get()
-        )
+          db.collection("refinement_history").doc(id).get(),
+        ),
       );
 
       refinements = refinementDocs
@@ -947,12 +947,12 @@ export async function getProposalById(
           originalProposal.mdx = createProposalMDX(
             originalProposal,
             clientName,
-            portfolioLink
+            portfolioLink,
           );
           refinedProposal.mdx = createProposalMDX(
             refinedProposal,
             clientName,
-            portfolioLink
+            portfolioLink,
           );
 
           return {
@@ -982,7 +982,7 @@ export async function getProposalById(
       originalProposalResponse.mdx = createProposalMDX(
         originalProposalResponse,
         clientName,
-        portfolioLink
+        portfolioLink,
       );
 
       versions.push({
@@ -1016,7 +1016,7 @@ export async function getProposalById(
     mainProposalResponse.mdx = createProposalMDX(
       mainProposalResponse,
       clientName,
-      portfolioLink
+      portfolioLink,
     );
 
     return {
@@ -1047,16 +1047,19 @@ export function refineProposalPrompt(
   jobTitle: string,
   clientName: string,
   tone?: string,
-  displayName?: string
+  displayName?: string,
+  customInstruction?: string,
 ): string {
   const toneInstruction = tone ? `Maintain a ${tone} tone throughout.` : "";
 
-  const refinementInstructions = {
+  const refinementInstructions: Record<RefinementAction, string> = {
     expand_text: `Expand the proposal by adding more details, examples, and context. Make it more comprehensive while maintaining its effectiveness.`,
     trim_text: `Make the proposal more concise by removing unnecessary words and redundancy. Keep all key information but reduce wordiness.`,
     simplify_text: `Simplify complex sentences and break down technical jargon. Make it easier to understand while maintaining professionalism.`,
     improve_flow: `Reorganize the proposal to improve the logical flow and readability. Ensure smooth transitions between sections.`,
     change_tone: `Adjust the tone to be ${tone}. Keep all the same information but adjust the language, formality, and voice accordingly.`,
+    custom:
+      customInstruction || `Apply the user's custom refinement instructions.`,
   };
 
   const closingNote = displayName
@@ -1072,8 +1075,8 @@ IMPORTANT: You MUST return your response as a valid JSON object with the SAME sc
 {
   "hook": "string - 1-2 sentences that grab attention",
   "solution": "string - explanation of how you'll solve their problem",
-  "keyPoints": "array of strings - bullet points with emojis highlighting services/advantages",
-  "portfolioLink": "string - portfolio URL if provided, otherwise MUST be empty string \"\". DO NOT generate or create portfolio links if none is provided.",
+  "keyPoints": "array of strings - bullet points highlighting services/advantages (use plain text, no emojis)",
+  "portfolioLink": "string - portfolio URL if provided, otherwise MUST be empty string \\"\\". DO NOT generate or create portfolio links if none is provided.",
   "availability": "string - availability statement",
   "support": "string - post-delivery support mention",
   "closing": "${
@@ -1113,7 +1116,7 @@ Always return valid JSON in the specified format.`;
 // Database functions for refinement
 export async function getLatestProposalVersion(
   proposalId: string,
-  userId: string
+  userId: string,
 ): Promise<{ proposal: ProposalResponse; refinementOrder: number }> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -1164,7 +1167,7 @@ export async function storeRefinement(
   refinementType: RefinementAction,
   originalProposal: ProposalResponse,
   refinedProposal: ProposalResponse,
-  currentOrder: number
+  currentOrder: number,
 ): Promise<string> {
   const app = getFirebaseApp();
   const db = getFirestore(app);
@@ -1218,7 +1221,7 @@ export async function storeRefinement(
 // Get all versions of a proposal for version history navigation
 export async function getProposalVersions(
   proposalId: string,
-  userId: string
+  userId: string,
 ): Promise<
   Array<{
     versionId: string;
@@ -1278,8 +1281,8 @@ export async function getProposalVersions(
     ) {
       const refinementDocs = await Promise.all(
         proposalData.allRefinementIds.map((id: string) =>
-          db.collection("refinement_history").doc(id).get()
-        )
+          db.collection("refinement_history").doc(id).get(),
+        ),
       );
 
       refinementDocs.forEach((doc) => {

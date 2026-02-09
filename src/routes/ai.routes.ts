@@ -1,6 +1,9 @@
 import { Router } from "express";
 import type { Router as ExpressRouter } from "express";
-import { authMiddleware, emailVerificationMiddleware } from "../middlewares/auth.middleware.ts";
+import {
+  authMiddleware,
+  emailVerificationMiddleware,
+} from "../middlewares/auth.middleware.ts";
 import {
   optimizeProfile,
   optimizeLinkedIn,
@@ -83,7 +86,12 @@ const aiRouter: ExpressRouter = Router();
  *       500:
  *         description: Internal Server Error - AI service or client creation failed
  */
-aiRouter.post("/optimize-upwork", authMiddleware, emailVerificationMiddleware, optimizeProfile);
+aiRouter.post(
+  "/optimize-upwork",
+  authMiddleware,
+  emailVerificationMiddleware,
+  optimizeProfile,
+);
 
 /**
  * @swagger
@@ -157,7 +165,12 @@ aiRouter.post("/optimize-upwork", authMiddleware, emailVerificationMiddleware, o
  *       500:
  *         description: Internal Server Error - AI service or client creation failed
  */
-aiRouter.post("/optimize-linkedin", authMiddleware, emailVerificationMiddleware, optimizeLinkedIn);
+aiRouter.post(
+  "/optimize-linkedin",
+  authMiddleware,
+  emailVerificationMiddleware,
+  optimizeLinkedIn,
+);
 
 /**
  * @swagger
@@ -228,7 +241,7 @@ aiRouter.post("/optimize-linkedin", authMiddleware, emailVerificationMiddleware,
  *                       type: array
  *                       items:
  *                         type: string
- *                       description: Bullet points with emojis highlighting services
+ *                       description: Bullet points highlighting key services and advantages
  *                     portfolioLink:
  *                       type: string
  *                       description: Portfolio URL if relevant
@@ -244,7 +257,7 @@ aiRouter.post("/optimize-linkedin", authMiddleware, emailVerificationMiddleware,
  *                     mdx:
  *                       type: string
  *                       description: Complete proposal as formatted markdown text
- *                       example: "Hi [Client Name]! I noticed you're looking for a WordPress developer...\n\nI can help you build a custom e-commerce solution...\n\n• ✅ Custom WordPress development\n• 🚀 E-commerce integration\n• 🎯 SEO optimization\n\nPortfolio: https://example.com\n\nI'm available to start immediately!\n\nI provide 30 days of free support after launch.\n\nLet's discuss your project!"
+ *                       example: "Hi [Client Name]! I noticed you're looking for a WordPress developer...\n\nI can help you build a custom e-commerce solution...\n\n• Custom WordPress development\n• E-commerce integration\n• SEO optimization\n\nPortfolio: https://example.com\n\nI'm available to start immediately!\n\nI provide 30 days of free support after launch.\n\nLet's discuss your project!"
  *       400:
  *         description: Bad Request - Invalid input validation
  *       401:
@@ -254,7 +267,12 @@ aiRouter.post("/optimize-linkedin", authMiddleware, emailVerificationMiddleware,
  *       500:
  *         description: Internal Server Error - AI service or client creation failed
  */
-aiRouter.post("/generate-proposal", authMiddleware, emailVerificationMiddleware, generateProposal);
+aiRouter.post(
+  "/generate-proposal",
+  authMiddleware,
+  emailVerificationMiddleware,
+  generateProposal,
+);
 
 /**
  * @swagger
@@ -358,7 +376,12 @@ aiRouter.post("/generate-proposal", authMiddleware, emailVerificationMiddleware,
  *       500:
  *         description: Internal Server Error - Failed to retrieve proposal history
  */
-aiRouter.get("/proposal-history", authMiddleware, emailVerificationMiddleware, getProposalHistory);
+aiRouter.get(
+  "/proposal-history",
+  authMiddleware,
+  emailVerificationMiddleware,
+  getProposalHistory,
+);
 
 /**
  * @swagger
@@ -522,7 +545,7 @@ aiRouter.get(
   "/proposal-history/:proposalId",
   authMiddleware,
   emailVerificationMiddleware,
-  getProposalByIdController
+  getProposalByIdController,
 );
 
 /**
@@ -530,7 +553,7 @@ aiRouter.get(
  * /api/v1/ai/refine-proposal:
  *   post:
  *     summary: Refine an existing AI proposal
- *     description: Refines an existing proposal by expanding, trimming, simplifying, improving flow, or changing tone
+ *     description: Refines an existing proposal by expanding, trimming, simplifying, improving flow, changing tone, or applying custom user instructions
  *     tags:
  *       - AI
  *     security:
@@ -550,12 +573,16 @@ aiRouter.get(
  *                 description: ID of the proposal to refine
  *               refinementType:
  *                 type: string
- *                 enum: [expand_text, trim_text, simplify_text, improve_flow, change_tone]
+ *                 enum: [expand_text, trim_text, simplify_text, improve_flow, change_tone, custom]
  *                 description: Type of refinement to apply
  *               newTone:
  *                 type: string
  *                 enum: [professional, conversational, confident, calm]
  *                 description: New tone (required only for change_tone refinement)
+ *               customInstruction:
+ *                 type: string
+ *                 maxLength: 1000
+ *                 description: Custom instruction from the user (required for 'custom' refinement type). Example - "Make the opening more personal" or "Add more about my React experience"
  *     responses:
  *       200:
  *         description: Proposal refined successfully
@@ -568,7 +595,12 @@ aiRouter.get(
  *       500:
  *         description: Internal server error
  */
-aiRouter.post("/refine-proposal", authMiddleware, emailVerificationMiddleware, refineProposal);
+aiRouter.post(
+  "/refine-proposal",
+  authMiddleware,
+  emailVerificationMiddleware,
+  refineProposal,
+);
 
 /**
  * @swagger
@@ -601,7 +633,7 @@ aiRouter.get(
   "/proposal-versions/:proposalId",
   authMiddleware,
   emailVerificationMiddleware,
-  getProposalVersionsController
+  getProposalVersionsController,
 );
 
 /**
@@ -688,7 +720,12 @@ aiRouter.get("/cron/cleanup-proposal-history-30d", cleanupOldProposalHistory);
  *       500:
  *         description: Internal server error
  */
-aiRouter.get("/quota", authMiddleware, emailVerificationMiddleware, getUserQuota);
+aiRouter.get(
+  "/quota",
+  authMiddleware,
+  emailVerificationMiddleware,
+  getUserQuota,
+);
 
 /**
  * @swagger
@@ -741,7 +778,7 @@ aiRouter.get(
   "/optimizer-history",
   authMiddleware,
   emailVerificationMiddleware,
-  getOptimizerHistory
+  getOptimizerHistory,
 );
 
 /**
@@ -777,7 +814,7 @@ aiRouter.get(
   "/optimizer-history/:recordId",
   authMiddleware,
   emailVerificationMiddleware,
-  getOptimizerHistoryByIdController
+  getOptimizerHistoryByIdController,
 );
 
 /**
@@ -796,6 +833,9 @@ aiRouter.get(
  *       500:
  *         description: Internal server error
  */
-aiRouter.get("/cron/cleanup-optimizer-history-30d", cleanupOldOptimizerHistoryController);
+aiRouter.get(
+  "/cron/cleanup-optimizer-history-30d",
+  cleanupOldOptimizerHistoryController,
+);
 
 export default aiRouter;
