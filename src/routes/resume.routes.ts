@@ -5,6 +5,7 @@ import {
   saveResume,
   listResumes,
   getResumeById,
+  importResumePdf,
 } from "../controllers/resume.controller.ts";
 
 const resumeRouter: ExpressRouter = Router();
@@ -81,6 +82,38 @@ resumeRouter.post("/save", authMiddleware, saveResume);
  *         description: Internal Server Error
  */
 resumeRouter.get("/list", authMiddleware, listResumes);
+
+/**
+ * @openapi
+ * /api/v1/resumes/import-pdf:
+ *   post:
+ *     summary: Import resume data from a PDF
+ *     description: Upload a text-based PDF resume and extract structured information for the resume builder.
+ *     tags:
+ *       - Resumes
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - resume
+ *             properties:
+ *               resume:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Resume imported successfully
+ *       400:
+ *         description: Invalid PDF upload or unreadable PDF
+ *       401:
+ *         description: Unauthorized
+ */
+resumeRouter.post("/import-pdf", authMiddleware, importResumePdf);
 
 /**
  * @openapi
